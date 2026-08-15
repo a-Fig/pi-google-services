@@ -1,3 +1,7 @@
+---
+description: "Gmail, Calendar, Tasks, Drive & Contacts MCP tools for Pi (OAuth, single binary)"
+---
+
 # pi-google-services
 
 Google Calendar & Gmail MCP server for Pi. Lets your Pi agent manage your calendar and emails through natural language.

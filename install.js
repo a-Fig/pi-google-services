@@ -1,28 +1,33 @@
 #!/usr/bin/env node
 /**
- * install.js — pi-google-services postinstall script.
+ * install.js — ensure pi-google-services is installed and wired into Pi.
  *
- * Downloads the correct binary for your platform from GitHub Releases,
- * installs it to ~/.local/bin/, and configures Pi's MCP.
+ * Idempotent. Safe to run more than once. Used both as npm postinstall and by
+ * the Pi extension to self-heal when npm's allowScripts blocked the postinstall.
  *
- * Run manually:  node install.js
+ * The npm tarball already ships the platform binaries and credentials.json, so
+ * by default nothing is downloaded: assets are unpacked from the local package.
+ * GitHub Releases is only a fallback for development checkouts without bin/.
  */
 
-const https = require("https");
 const fs = require("fs");
-const path = require("path");
 const os = require("os");
+const path = require("path");
 const zlib = require("zlib");
+const { execSync } = require("child_process");
 
 const PKG = require("./package.json");
 const REPO = PKG.repository.url.replace("git+", "").replace(".git", "");
 const VERSION = "v" + PKG.version;
 
-const PI_MCP_PATH = path.join(os.homedir(), ".pi", "agent", "mcp.json");
+const PKG_DIR = __dirname;
+const PI_AGENT_DIR = path.join(os.homedir(), ".pi", "agent");
+const PI_MCP_PATH = path.join(PI_AGENT_DIR, "mcp.json");
 const BIN_DIR = path.join(os.homedir(), ".local", "bin");
 const BIN_NAME = "pi-google-services";
 const BIN_PATH = path.join(BIN_DIR, BIN_NAME);
 const CONFIG_DIR = path.join(os.homedir(), ".config", "pi-google-services");
+const CREDS_DEST = path.join(CONFIG_DIR, "credentials.json");
 
 function platform() {
 	const arch = os.arch();
@@ -40,11 +45,11 @@ function platform() {
 
 function download(url, dest) {
 	return new Promise((resolve, reject) => {
+		const https = require("https");
 		const file = fs.createWriteStream(dest);
 		https
 			.get(url, (res) => {
 				if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-					// Follow redirect
 					file.close();
 					fs.unlinkSync(dest);
 					return download(res.headers.location, dest).then(resolve).catch(reject);
@@ -69,27 +74,96 @@ function download(url, dest) {
 	});
 }
 
-function setupMcpConfig() {
-	if (!fs.existsSync(PI_MCP_PATH)) {
-		console.log("  ⚠ Pi MCP config not found at", PI_MCP_PATH);
-		console.log("  Skipping MCP auto-config. Add manually:");
-		console.log(
-			`    { "mcpServers": { "google-services": { "command": "${BIN_PATH}", "args": ["serve"] } } }`,
+function localAsset(...segments) {
+	return path.join(PKG_DIR, ...segments);
+}
+
+function binaryInstalled() {
+	if (!fs.existsSync(BIN_PATH)) return false;
+	try {
+		const out = execSync(
+			`${BIN_PATH} --version 2>/dev/null || ${BIN_PATH} help 2>&1 || true`,
+			{ encoding: "utf-8" },
 		);
+		return out.includes("v" + VERSION) || out.includes(VERSION);
+	} catch {
+		return false;
+	}
+}
+
+async function ensureBinary() {
+	if (binaryInstalled()) {
+		console.log(`  ✓ Binary already up-to-date (v${VERSION})`);
 		return;
 	}
 
+	const assetName = `pi-google-services-${platform()}.gz`;
+	const localSrc = localAsset("bin", assetName);
+
+	let compressed;
+	if (fs.existsSync(localSrc)) {
+		console.log(`  ✓ Using bundled binary ${assetName}`);
+		compressed = fs.readFileSync(localSrc);
+	} else {
+		const url = `${REPO}/releases/download/${VERSION}/${assetName}`;
+		const dest = path.join(os.tmpdir(), assetName);
+		console.log(`  ⬇ Downloading ${assetName}...`);
+		try {
+			await download(url, dest);
+			compressed = fs.readFileSync(dest);
+			fs.unlinkSync(dest);
+		} catch (err) {
+			console.error(`  ❌ Binary download failed: ${err.message}`);
+			console.error(
+				"     Build from source instead: git clone ... && go build -o pi-google-services .",
+			);
+			process.exit(1);
+		}
+	}
+
+	fs.mkdirSync(BIN_DIR, { recursive: true });
+	const binary = zlib.gunzipSync(compressed);
+	fs.writeFileSync(BIN_PATH, binary, { mode: 0o755 });
+	console.log(`  ✓ Installed to ${BIN_PATH}`);
+}
+
+function ensureCredentials() {
+	if (fs.existsSync(CREDS_DEST)) {
+		console.log("  ✓ Credentials already present");
+		return;
+	}
+	fs.mkdirSync(CONFIG_DIR, { recursive: true });
+
+	const localSrc = localAsset("credentials.json");
+	if (fs.existsSync(localSrc)) {
+		fs.copyFileSync(localSrc, CREDS_DEST);
+		console.log(`  ✓ Credentials saved to ${CREDS_DEST}`);
+		return;
+	}
+	console.warn(
+		"  ⚠ credentials.json not bundled. Set GOOGLE_OAUTH_CREDENTIALS or run setup manually.",
+	);
+}
+
+function ensureMcpConfig() {
 	let config;
-	try {
-		config = JSON.parse(fs.readFileSync(PI_MCP_PATH, "utf-8"));
-	} catch {
+	if (fs.existsSync(PI_MCP_PATH)) {
+		try {
+			config = JSON.parse(fs.readFileSync(PI_MCP_PATH, "utf-8"));
+		} catch (err) {
+			console.error(`  ❌ ${PI_MCP_PATH} is not valid JSON.`);
+			console.error("     Refusing to overwrite it. Fix it, then re-run install.js.");
+			console.error(`     Parse error: ${err.message}`);
+			return false;
+		}
+	} else {
 		config = { mcpServers: {} };
 	}
 
 	if (!config.mcpServers) config.mcpServers = {};
 	if (config.mcpServers["google-services"]) {
 		console.log("  ✓ google-services already configured in Pi MCP");
-		return;
+		return true;
 	}
 
 	config.mcpServers["google-services"] = {
@@ -97,96 +171,25 @@ function setupMcpConfig() {
 		args: ["serve"],
 	};
 
+	fs.mkdirSync(PI_AGENT_DIR, { recursive: true });
 	fs.writeFileSync(PI_MCP_PATH, JSON.stringify(config, null, 2) + "\n");
 	console.log("  ✓ Pi MCP config updated");
+	return true;
 }
 
 async function main() {
 	console.log("\n📦 pi-google-services installer");
 	console.log("==============================\n");
 
-	const plat = platform();
-	const assetName = `pi-google-services-${plat}.gz`;
-	const url = `${REPO}/releases/download/${VERSION}/${assetName}`;
-	const dest = path.join(os.tmpdir(), assetName);
-	const binDir = BIN_DIR;
+	await ensureBinary();
+	ensureCredentials();
+	const mcpOk = ensureMcpConfig();
 
-	// Ensure bin dir
-	fs.mkdirSync(binDir, { recursive: true });
-
-	// Only download binary if it doesn't exist or version differs
-	let needsBinary = true;
-	if (fs.existsSync(BIN_PATH)) {
-		try {
-			const out = require("child_process").execSync(
-				`${BIN_PATH} --version 2>/dev/null || ${BIN_PATH} help 2>&1 || true`,
-				{ encoding: "utf-8" },
-			);
-			// Check if help output contains current version
-			if (out.includes("v" + VERSION) || out.includes(VERSION)) {
-				needsBinary = false;
-			}
-		} catch {
-			// Binary broken, re-download
-		}
+	if (!mcpOk) {
+		console.error("\n  ❌ Installation incomplete: MCP config could not be resolved.");
+		process.exit(1);
 	}
 
-	if (needsBinary) {
-		console.log(`  ⬇ Downloading ${assetName}...`);
-		try {
-			await download(url, dest);
-		} catch (err) {
-			console.error(`\n  ❌ Download failed: ${err.message}`);
-			if (fs.existsSync(BIN_PATH)) {
-				console.log("  Using existing binary.");
-			} else {
-				console.error("\n  Build from source instead:");
-				console.error(
-					"    git clone https://github.com/lucasvidela94/pi-google-services.git",
-				);
-				console.error(
-					"    cd pi-google-services && go build -o pi-google-services .",
-				);
-				console.error("    cp pi-google-services ~/.local/bin/");
-				process.exit(1);
-			}
-		}
-		if (fs.existsSync(dest)) {
-			const compressed = fs.readFileSync(dest);
-			const binary = zlib.gunzipSync(compressed);
-			fs.writeFileSync(BIN_PATH, binary, { mode: 0o755 });
-			fs.unlinkSync(dest);
-			console.log(`  ✓ Installed to ${BIN_PATH}`);
-		}
-	} else {
-		console.log(`  ✓ Binary already up-to-date (v${VERSION})`);
-	}
-
-	// Create config dir
-	fs.mkdirSync(CONFIG_DIR, { recursive: true });
-
-	// Download credentials.json only if missing
-	const credsDest = path.join(CONFIG_DIR, "credentials.json");
-	if (!fs.existsSync(credsDest)) {
-		const credsUrl = `${REPO}/releases/download/${VERSION}/credentials.json`;
-		console.log(`  ⬇ Downloading credentials...`);
-		try {
-			await download(credsUrl, credsDest);
-			console.log(`  ✓ Credentials saved to ${credsDest}`);
-		} catch (err) {
-			console.error(`  ⚠ Could not download credentials: ${err.message}`);
-			console.error(
-				"  Set GOOGLE_OAUTH_CREDENTIALS or place credentials.json manually.",
-			);
-		}
-	} else {
-		console.log("  ✓ Credentials already present");
-	}
-
-	// Setup MCP
-	setupMcpConfig();
-
-	// Done
 	console.log("");
 	console.log("  ─────────────────────────────────────");
 	console.log("  ✅ pi-google-services installed!");

@@ -3,6 +3,15 @@
 Google Calendar, Gmail, and Google Meet MCP server for Pi.
 Single binary, zero runtime deps. Login once, manage everything from your agent.
 
+## Requirements
+
+- **pi-mcp-adapter** — provides the `/mcp` command that Pi's core doesn't ship.
+  Install it first:
+
+```bash
+pi install npm:pi-mcp-adapter
+```
+
 ## Quick Install
 
 ```bash
@@ -10,6 +19,14 @@ pi install npm:pi-google-services
 pi-google-services setup
 # Restart Pi session, then:
 # "show my events", "read my inbox", "create a meeting with Meet"
+```
+
+If npm's `allowScripts` blocked the postinstall (Pi's default), the binary is
+installed automatically on your next Pi session start — the extension
+self-heals. You can also run it manually at any time:
+
+```bash
+node ~/.pi/agent/npm/node_modules/pi-google-services/install.js
 ```
 
 ## Updates

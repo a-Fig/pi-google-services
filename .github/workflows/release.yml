@@ -81,6 +81,17 @@ jobs:
             exit 1
           fi
 
+      - name: Validate credentials.json
+        run: |
+          if ! jq empty credentials.json 2>/dev/null; then
+            echo "❌ credentials.json is invalid JSON" >&2
+            echo "   GOOGLE_OAUTH_CREDENTIALS_JSON was saved with line-wrapping" >&2
+            echo "   (literal newlines inside string values). Re-save it as a" >&2
+            echo "   single-line JSON in GitHub settings, then re-tag the release." >&2
+            exit 1
+          fi
+          echo "✅ credentials.json is valid JSON"
+
       - uses: actions/upload-artifact@v4
         with:
           name: credentials.json
