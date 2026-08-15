@@ -26,7 +26,7 @@ import (
 	"github.com/sombi/pi-google-services/internal/tasks"
 )
 
-const version = "0.1.17"
+const version = "0.1.18"
 
 func main() {
 	log.SetFlags(0)
@@ -124,6 +124,18 @@ func allScopes() []string {
 	return scopes
 }
 
+// newAuthenticator builds an OAuth authenticator from the client credentials,
+// always requesting every registered service scope. login, setup and serve all
+// share this single source of truth, so every flow asks Google for the same
+// permissions — no hardcoded subsets, no drift between commands.
+func newAuthenticator(credsData []byte) (*auth.Authenticator, error) {
+	creds, err := config.LoadCredentialsFromBytes(credsData)
+	if err != nil {
+		return nil, fmt.Errorf("parse credentials: %w", err)
+	}
+	return auth.NewFromCredentials(creds, allScopes()), nil
+}
+
 // All tools aggregated from all services.
 func allTools() []mcp.ToolDefinition {
 	var tools []mcp.ToolDefinition
@@ -141,20 +153,11 @@ func cmdLogin() {
 		os.Exit(1)
 	}
 
-	creds, err := config.LoadCredentialsFromBytes(credsData)
+	a, err := newAuthenticator(credsData)
 	if err != nil {
 		log.Fatalf("Credenciales inválidas: %v", err)
 	}
 
-	// Build auth with all service scopes
-	scopes := allScopes()
-	cfg := &config.Config{
-		ClientID:     creds.Installed.ClientID,
-		ClientSecret: creds.Installed.ClientSecret,
-		Scopes:       scopes,
-	}
-
-	a := auth.NewFromConfig(cfg)
 	ctx := context.Background()
 
 	fmt.Println("\n🔐 Abriendo navegador para autorizar con Google...")
@@ -162,10 +165,6 @@ func cmdLogin() {
 	token, err := a.Login(ctx)
 	if err != nil {
 		log.Fatalf("Login falló: %v", err)
-	}
-
-	if err := cfg.Save(); err != nil {
-		log.Printf("Warning: no se pudo guardar config: %v", err)
 	}
 
 	showLen := len(token.AccessToken)
@@ -194,11 +193,6 @@ func cmdLogout() {
 }
 
 func cmdServe() {
-	cfg, err := config.Load()
-	if err != nil {
-		log.Fatalf("Config: %v", err)
-	}
-
 	token, err := auth.LoadToken()
 	if err != nil {
 		log.Fatalf("Token: %v", err)
@@ -207,23 +201,18 @@ func cmdServe() {
 		log.Fatal("❌ No autenticado. Corré 'pi-google-services login' primero.")
 	}
 
-	// Ensure client ID is configured
-	if cfg.ClientID == "" {
-		credsData, err := getCredentialsJSON()
-		if err == nil {
-			if creds, err := config.LoadCredentialsFromBytes(credsData); err == nil {
-				a := auth.NewFromCredentials(creds)
-				cfg.ClientID = a.OAuthConfig.ClientID
-				cfg.ClientSecret = a.OAuthConfig.ClientSecret
-				cfg.Scopes = allScopes()
-			}
-		}
+	// Always build the authenticator from client credentials with all scopes.
+	// Never trust scopes persisted in config.json — they can drift out of sync
+	// with the registered services (see issue #6).
+	credsData, err := getCredentialsJSON()
+	if err != nil {
+		log.Fatalf("credentials.json no encontrado: %v", err)
 	}
-	if cfg.ClientID == "" {
-		log.Fatal("❌ No client ID. Corré 'pi-google-services login' primero.")
+	a, err := newAuthenticator(credsData)
+	if err != nil {
+		log.Fatalf("Credenciales inválidas: %v", err)
 	}
 
-	a := auth.NewFromConfig(cfg)
 	ctx := context.Background()
 	ts := a.TokenSource(ctx, token)
 
@@ -278,11 +267,6 @@ func cmdSetup() {
 		os.Exit(1)
 	}
 
-	creds, err := config.LoadCredentialsFromBytes(credsData)
-	if err != nil {
-		log.Fatalf("Credenciales inválidas: %v", err)
-	}
-
 	// Check if already authenticated
 	token, err := auth.LoadToken()
 	if err == nil && token != nil {
@@ -294,22 +278,16 @@ func cmdSetup() {
 		return
 	}
 
-	a := auth.NewFromCredentials(creds)
+	a, err := newAuthenticator(credsData)
+	if err != nil {
+		log.Fatalf("Credenciales inválidas: %v", err)
+	}
 	ctx := context.Background()
 
 	fmt.Println("\n🔐 Abriendo navegador para autorizar con Google...")
 	token, err = a.Login(ctx)
 	if err != nil {
 		log.Fatalf("Login falló: %v", err)
-	}
-
-	cfg := &config.Config{
-		ClientID:     a.OAuthConfig.ClientID,
-		ClientSecret: a.OAuthConfig.ClientSecret,
-		Scopes:       a.OAuthConfig.Scopes,
-	}
-	if err := cfg.Save(); err != nil {
-		log.Printf("Warning: %v", err)
 	}
 
 	fmt.Printf("\n✅ Setup completo!\n")
