@@ -48,41 +48,19 @@ func GeneratePKCE() (*PKCEParams, error) {
 type Authenticator struct {
 	OAuthConfig *oauth2.Config
 	Token       *oauth2.Token
-	cfg         *config.Config
 }
 
 // NewFromCredentials creates an Authenticator from a Google-provided credentials
 // JSON file (the one you download from Google Cloud Console).
-func NewFromCredentials(creds *config.Credentials) *Authenticator {
-	installed := creds.Installed
-	if installed.ClientID == "" {
-		installed = creds.Web
-	}
-
-	cfg := &config.Config{
-		ClientID:     installed.ClientID,
-		ClientSecret: installed.ClientSecret,
-		Scopes: []string{
-			"https://www.googleapis.com/auth/calendar",
-			"https://www.googleapis.com/auth/calendar.events",
-		},
-	}
-
-	return newFromConfig(cfg)
-}
-
-// NewFromConfig creates an Authenticator from the app Config.
-func NewFromConfig(cfg *config.Config) *Authenticator {
-	return newFromConfig(cfg)
-}
-
-func newFromConfig(cfg *config.Config) *Authenticator {
+// Scopes are provided by the caller (e.g. allScopes() in main) so setup and
+// login always request the same set of permissions.
+func NewFromCredentials(creds *config.Credentials, scopes []string) *Authenticator {
+	app := creds.AppConfig()
 	return &Authenticator{
-		cfg: cfg,
 		OAuthConfig: &oauth2.Config{
-			ClientID:     cfg.ClientID,
-			ClientSecret: cfg.ClientSecret,
-			Scopes:       cfg.Scopes,
+			ClientID:     app.ClientID,
+			ClientSecret: app.ClientSecret,
+			Scopes:       scopes,
 			Endpoint:     google.Endpoint,
 			RedirectURL:  "http://localhost:0" + redirectPath,
 		},

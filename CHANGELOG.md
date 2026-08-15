@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.18
+
+- **Fix: `setup` now requests all 5 service scopes** — previously it only asked Google for Calendar permissions (hardcoded in `NewFromCredentials`), so Gmail/Tasks/Drive/Contacts failed after following the official `setup` flow.
+- **Refactor: single source of truth for OAuth scopes** — `login`, `setup` and `serve` now share one `newAuthenticator()` that always derives scopes from `allScopes()` (the registered services). `serve` no longer trusts scopes persisted in `config.json`, which could drift out of sync. The redundant `config.json` persistence (`Config`/`Load`/`Save`) was removed — client credentials live only in `credentials.json`, tokens in `tokens.json`.
+- **Refactor: `config.Credentials.AppConfig()`** — the Installed→Web fallback moved from inside the auth constructor to the data type that owns it.
+
 ## v0.1.17
 
 - **Fix: silent MCP config skip in install.js** — `~/.pi/agent/mcp.json` is now created (with `mkdir -p`) when missing, instead of being skipped with a warning while install still reported success. Install now fails with a clear error if the MCP config can't be resolved.

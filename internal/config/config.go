@@ -9,22 +9,11 @@ import (
 )
 
 const (
-	AppName    = "pi-google-services"
-	ConfigDir  = ".config/" + AppName
-	ConfigFile = "config.json"
-	TokenFile  = "tokens.json"
-	CredFile   = "credentials.json"
+	AppName   = "pi-google-services"
+	ConfigDir = ".config/" + AppName
+	TokenFile = "tokens.json"
+	CredFile  = "credentials.json"
 )
-
-// Config holds the app configuration.
-type Config struct {
-	// ClientID is the OAuth 2.0 client identifier.
-	ClientID string `json:"client_id,omitempty"`
-	// ClientSecret is only needed for web apps; PKCE uses client_id only.
-	ClientSecret string `json:"client_secret,omitempty"`
-	// Scopes to request.
-	Scopes []string `json:"scopes,omitempty"`
-}
 
 // Credentials represents the OAuth client credentials file downloaded from GC
 type Credentials struct {
@@ -42,6 +31,16 @@ type InstalledConfig struct {
 	RedirectURIs            []string `json:"redirect_uris"`
 }
 
+// AppConfig returns the effective OAuth client configuration for this
+// credentials file. Desktop credentials use the "installed" block; some
+// downloads only populate "web", so fall back to it when installed is empty.
+func (c *Credentials) AppConfig() InstalledConfig {
+	if c.Installed.ClientID != "" {
+		return c.Installed
+	}
+	return c.Web
+}
+
 // Tokens stores OAuth2 tokens persistently.
 type Tokens struct {
 	AccessToken  string `json:"access_token"`
@@ -57,53 +56,6 @@ var Dir = func() (string, error) {
 		return "", fmt.Errorf("home dir: %w", err)
 	}
 	return filepath.Join(home, ConfigDir), nil
-}
-
-// Load reads config from disk.
-func Load() (*Config, error) {
-	dir, err := Dir()
-	if err != nil {
-		return nil, err
-	}
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return nil, fmt.Errorf("mkdir: %w", err)
-	}
-	cfg := &Config{
-		Scopes: []string{
-			"https://www.googleapis.com/auth/calendar",
-			"https://www.googleapis.com/auth/calendar.events",
-		},
-	}
-	data, err := os.ReadFile(filepath.Join(dir, ConfigFile))
-	if os.IsNotExist(err) {
-		return cfg, nil
-	} else if err != nil {
-		return nil, fmt.Errorf("read config: %w", err)
-	}
-	if err := json.Unmarshal(data, cfg); err != nil {
-		return nil, fmt.Errorf("parse config: %w", err)
-	}
-	return cfg, nil
-}
-
-// Save persists the config to disk.
-func (c *Config) Save() error {
-	dir, err := Dir()
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return fmt.Errorf("mkdir: %w", err)
-	}
-	data, err := json.MarshalIndent(c, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal: %w", err)
-	}
-	path := filepath.Join(dir, ConfigFile)
-	if err := os.WriteFile(path, data, 0600); err != nil {
-		return fmt.Errorf("write config: %w", err)
-	}
-	return nil
 }
 
 // LoadCredentials reads a Google-provided credentials JSON file from disk.

@@ -19,29 +19,24 @@ func TestDir(t *testing.T) {
 	}
 }
 
-func TestSaveAndLoadConfig(t *testing.T) {
-	tmp := t.TempDir()
-	origDir := Dir
-	Dir = func() (string, error) { return tmp, nil }
-	t.Cleanup(func() { Dir = origDir })
+func TestAppConfigPrefersInstalled(t *testing.T) {
+	creds := &Credentials{
+		Installed: InstalledConfig{ClientID: "installed-id", ClientSecret: "installed-secret"},
+		Web:       InstalledConfig{ClientID: "web-id", ClientSecret: "web-secret"},
+	}
+	app := creds.AppConfig()
+	if app.ClientID != "installed-id" {
+		t.Errorf("AppConfig().ClientID = %q, want %q", app.ClientID, "installed-id")
+	}
+}
 
-	cfg := &Config{
-		ClientID: "test-client-id",
-		Scopes:   []string{"scope1", "scope2"},
+func TestAppConfigFallsBackToWeb(t *testing.T) {
+	creds := &Credentials{
+		Web: InstalledConfig{ClientID: "web-id", ClientSecret: "web-secret"},
 	}
-	if err := cfg.Save(); err != nil {
-		t.Fatalf("Save(): %v", err)
-	}
-
-	loaded, err := Load()
-	if err != nil {
-		t.Fatalf("Load(): %v", err)
-	}
-	if loaded.ClientID != "test-client-id" {
-		t.Errorf("ClientID = %q, want %q", loaded.ClientID, "test-client-id")
-	}
-	if len(loaded.Scopes) != 2 {
-		t.Errorf("Scopes = %v, want 2", loaded.Scopes)
+	app := creds.AppConfig()
+	if app.ClientID != "web-id" {
+		t.Errorf("AppConfig().ClientID = %q, want %q", app.ClientID, "web-id")
 	}
 }
 
