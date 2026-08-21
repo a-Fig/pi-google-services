@@ -39,11 +39,11 @@ func main() {
 
 	switch os.Args[1] {
 	case "login":
-		cmdLogin()
+		cmdLogin(wantsNoBrowser(os.Args))
 	case "logout":
 		cmdLogout()
 	case "setup":
-		cmdSetup()
+		cmdSetup(wantsNoBrowser(os.Args))
 	case "update":
 		cmdUpdate()
 	case "serve":
@@ -145,7 +145,18 @@ func allTools() []mcp.ToolDefinition {
 	return tools
 }
 
-func cmdLogin() {
+// wantsNoBrowser reports whether --no-browser was passed anywhere in args,
+// forcing the manual paste-code OAuth flow (headless hosts, WSL, SSH).
+func wantsNoBrowser(args []string) bool {
+	for _, a := range args {
+		if a == "--no-browser" {
+			return true
+		}
+	}
+	return false
+}
+
+func cmdLogin(noBrowser bool) {
 	credsData, err := getCredentialsJSON()
 	if err != nil {
 		fmt.Println("❌ No se encontraron credenciales.")
@@ -160,9 +171,12 @@ func cmdLogin() {
 
 	ctx := context.Background()
 
-	fmt.Println("\n🔐 Abriendo navegador para autorizar con Google...")
+	fmt.Println("\n🔐 Autorizando con Google...")
+	if noBrowser {
+		fmt.Println("   Modo manual (--no-browser): vas a pegar la URL de autorización.")
+	}
 	fmt.Printf("   Scopes solicitados: %d servicios\n", len(registeredServices()))
-	token, err := a.Login(ctx)
+	token, err := a.LoginWithOptions(ctx, auth.LoginOptions{NoBrowser: noBrowser})
 	if err != nil {
 		log.Fatalf("Login falló: %v", err)
 	}
@@ -258,7 +272,7 @@ func cmdServe() {
 	}
 }
 
-func cmdSetup() {
+func cmdSetup(noBrowser bool) {
 	// Login flow
 	credsData, err := getCredentialsJSON()
 	if err != nil {
@@ -284,8 +298,11 @@ func cmdSetup() {
 	}
 	ctx := context.Background()
 
-	fmt.Println("\n🔐 Abriendo navegador para autorizar con Google...")
-	token, err = a.Login(ctx)
+	fmt.Println("\n🔐 Autorizando con Google...")
+	if noBrowser {
+		fmt.Println("   Modo manual (--no-browser): vas a pegar la URL de autorización.")
+	}
+	token, err = a.LoginWithOptions(ctx, auth.LoginOptions{NoBrowser: noBrowser})
 	if err != nil {
 		log.Fatalf("Login falló: %v", err)
 	}

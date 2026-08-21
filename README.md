@@ -181,6 +181,23 @@ unverified. This does not affect security.
 
 The binary never phones home, tracks usage, or sends telemetry.
 
+## Headless / WSL Login (`--no-browser`)
+
+On machines without a browser (SSH, VPS, containers) or inside WSL where
+localhost forwarding breaks, use the manual paste flow:
+
+```bash
+pi-google-services login --no-browser
+```
+
+1. Open the printed authorization URL on **any device** (your phone works).
+2. Approve the consent screen. Google redirects to a `localhost` page that
+   fails to load — that is expected.
+3. Copy the full URL from the address bar and paste it into the terminal.
+
+The plain `login`/`setup` flow automatically falls back to this mode when
+no browser can be launched.
+
 ## Development
 
 ```bash

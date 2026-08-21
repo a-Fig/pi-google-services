@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.19
+
+- **Feature: headless login (`--no-browser`)** — `login` and `setup` now accept `--no-browser` for machines without a browser (SSH, VPS, containers, WSL with broken localhost forwarding). The tool prints the authorization URL; you open it on any device (phone included), approve, and paste back the redirected URL. PKCE is preserved end-to-end.
+- **Fix: automatic manual-mode fallback** — when no browser can be launched, the flow degrades to the manual paste prompt instead of printing a dead URL and hanging.
+- **Fix: authorization URL now carries a real loopback port** — the callback server always starts before building the auth URL. Previously, in flows without a listener the URL contained `redirect_uri=http://localhost:0/...`, which Google can reject.
+- **Refactor: `Authenticator.LoginWithOptions(opts)`** — browser and manual flows share one code path (single callback server, single exchange). `Login()` keeps its signature as the default-options wrapper. Input/output are injectable for testing.
+
 ## v0.1.18
 
 - **Fix: `setup` now requests all 5 service scopes** — previously it only asked Google for Calendar permissions (hardcoded in `NewFromCredentials`), so Gmail/Tasks/Drive/Contacts failed after following the official `setup` flow.

@@ -2,15 +2,20 @@
 package auth
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
+	"net/url"
+	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -20,6 +25,44 @@ import (
 )
 
 const redirectPath = "/oauth/callback"
+
+// ParseAuthCode extracts the authorization code from user-pasted input.
+// It accepts either a full callback URL (copied from the browser address bar
+// after Google redirects, even if the page failed to load) or a raw code.
+func ParseAuthCode(pasted string) (string, error) {
+	pasted = strings.TrimSpace(pasted)
+	if pasted == "" {
+		return "", fmt.Errorf("no input: paste the callback URL or the code")
+	}
+
+	// Raw code (no URL): accept as-is if it looks like one token.
+	// Google auth codes never contain whitespace; anything with spaces is
+	// user chatter, not a code.
+	if !strings.Contains(pasted, "://") {
+		if strings.ContainsAny(pasted, " \t") {
+			return "", fmt.Errorf("not a valid code or URL: %q", pasted)
+		}
+		return pasted, nil
+	}
+
+	u, err := url.Parse(pasted)
+	if err != nil {
+		return "", fmt.Errorf("parse pasted URL: %w", err)
+	}
+	q := u.Query()
+	if e := q.Get("error"); e != "" {
+		desc := q.Get("error_description")
+		if desc != "" {
+			return "", fmt.Errorf("authorization denied (%s): %s", e, desc)
+		}
+		return "", fmt.Errorf("authorization denied (%s)", e)
+	}
+	code := q.Get("code")
+	if code == "" {
+		return "", fmt.Errorf("no code found in pasted URL")
+	}
+	return code, nil
+}
 
 // PKCEParams holds the PKCE code challenge data.
 type PKCEParams struct {
@@ -67,33 +110,187 @@ func NewFromCredentials(creds *config.Credentials, scopes []string) *Authenticat
 	}
 }
 
-// Login performs the PKCE OAuth flow:
-// 1. Starts a local HTTP server on a random port
-// 2. Opens the browser to Google's authorization endpoint
-// 3. Catches the callback with the authorization code
-// 4. Exchanges the code + code_verifier for tokens
-// Returns the OAuth2 token.
+// promptForAuthCode shows the auth URL with manual-mode instructions and
+// reads user input until it can parse an authorization code. It re-prompts
+// on unparseable input and fails immediately on a denied authorization.
+func promptForAuthCode(authURL string, input io.Reader, output io.Writer) (string, error) {
+	scanner := bufio.NewScanner(input)
+	for {
+		fmt.Fprintf(output, `
+No browser available — authorize from any device:
+
+  1. Open this URL (on this machine or your phone):
+
+     %s
+
+  2. Approve the consent screen. Google will redirect to a localhost page
+     that FAILS TO LOAD — that is expected.
+
+  3. Copy the full URL from the browser address bar and paste it here.
+
+Paste the URL or code (empty line to retry, Ctrl+C to cancel):
+> `, authURL)
+
+		if !scanner.Scan() {
+			return "", fmt.Errorf("no authorization code entered")
+		}
+		code, err := ParseAuthCode(scanner.Text())
+		if err == nil {
+			return code, nil
+		}
+		if strings.Contains(err.Error(), "denied") {
+			return "", err
+		}
+		fmt.Fprintf(output, "⚠ %v\n", err)
+	}
+}
+
+// LoginOptions configures the login flow. Zero values give the classic
+// behavior: try the system browser and fail loudly if unavailable.
+type LoginOptions struct {
+	// NoBrowser skips the browser/loopback flow entirely and prompts for
+	// a pasted authorization URL instead. Use on headless hosts (SSH,
+	// VPS, containers) or inside WSL when localhost forwarding breaks.
+	NoBrowser bool
+
+	// Input is where the pasted URL is read from in manual mode
+	// (default os.Stdin). Output receives prompts (default os.Stdout).
+	Input  io.Reader
+	Output io.Writer
+
+	// OpenBrowser overrides the default browser launcher (tests).
+	OpenBrowser func(string) error
+}
+
+func (o LoginOptions) input() io.Reader {
+	if o.Input != nil {
+		return o.Input
+	}
+	return os.Stdin
+}
+
+func (o LoginOptions) output() io.Writer {
+	if o.Output != nil {
+		return o.Output
+	}
+	return os.Stdout
+}
+
+func (o LoginOptions) openBrowser() func(string) error {
+	if o.OpenBrowser != nil {
+		return o.OpenBrowser
+	}
+	return openBrowser
+}
+
+// Login performs the PKCE OAuth flow with default options.
 func (a *Authenticator) Login(ctx context.Context) (*oauth2.Token, error) {
+	return a.LoginWithOptions(ctx, LoginOptions{})
+}
+
+// LoginWithOptions performs the PKCE OAuth flow. It tries the loopback +
+// browser flow unless opts.NoBrowser is set, and falls back to manual
+// paste mode when the browser cannot be launched.
+func (a *Authenticator) LoginWithOptions(ctx context.Context, opts LoginOptions) (*oauth2.Token, error) {
 	pkce, err := GeneratePKCE()
 	if err != nil {
 		return nil, fmt.Errorf("generate pkce: %w", err)
 	}
 
-	// Local server to catch the redirect
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	// The callback server always runs: it allocates the real loopback port
+	// that goes into the authorization URL (port 0 is not a valid
+	// redirect), and catches the redirect whenever a browser is involved.
+	cb, cleanup, err := startCallbackServer()
 	if err != nil {
-		return nil, fmt.Errorf("listen: %w", err)
+		return nil, err
 	}
-	defer listener.Close()
+	defer cleanup()
+	a.OAuthConfig.RedirectURL = cb.url
 
-	port := listener.Addr().(*net.TCPAddr).Port
-	a.OAuthConfig.RedirectURL = fmt.Sprintf("http://localhost:%d%s", port, redirectPath)
+	authURL := a.authCodeURL(pkce)
 
-	// Build auth URL with PKCE params
-	authURL := a.OAuthConfig.AuthCodeURL("state",
+	var authCode string
+	switch {
+	case opts.NoBrowser:
+		if authCode, err = promptForAuthCode(authURL, opts.input(), opts.output()); err != nil {
+			return nil, err
+		}
+	default:
+		fmt.Fprintln(opts.output(), "\n📎 Opening browser for Google authorization...")
+		if openErr := opts.openBrowser()(authURL); openErr != nil {
+			// Browser unavailable: degrade to manual paste instead of dying.
+			fmt.Fprintln(opts.output(), "\n⚠ Could not launch a browser — switching to manual mode.")
+			if authCode, err = promptForAuthCode(authURL, opts.input(), opts.output()); err != nil {
+				return nil, err
+			}
+			break
+		}
+		fmt.Fprintln(opts.output(), "Check your browser and authorize the application.")
+
+		select {
+		case authCode = <-cb.codeCh:
+			fmt.Fprintln(opts.output(), "✓ Authorization code received, exchanging for tokens...")
+		case err := <-cb.errCh:
+			return nil, fmt.Errorf("callback: %w", err)
+		case <-ctx.Done():
+			return nil, fmt.Errorf("login cancelled")
+		}
+	}
+
+	token, err := a.exchange(ctx, pkce, authCode)
+	if err != nil {
+		return nil, err
+	}
+
+	a.Token = token
+
+	if err := saveOAuthToken(token); err != nil {
+		log.Printf("Warning: could not save token: %v", err)
+	}
+
+	fmt.Fprintln(opts.output(), "✓ Authentication successful!")
+	return token, nil
+}
+
+// authCodeURL builds the Google authorization URL with PKCE parameters.
+func (a *Authenticator) authCodeURL(pkce *PKCEParams) string {
+	return a.OAuthConfig.AuthCodeURL("state",
 		oauth2.SetAuthURLParam("code_challenge", pkce.CodeChallenge),
 		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
 	)
+}
+
+// exchange trades an authorization code for tokens using the PKCE verifier
+// and persists the result to disk.
+func (a *Authenticator) exchange(ctx context.Context, pkce *PKCEParams, code string) (*oauth2.Token, error) {
+	token, err := a.OAuthConfig.Exchange(ctx, code,
+		oauth2.SetAuthURLParam("code_verifier", pkce.CodeVerifier),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("token exchange: %w", err)
+	}
+	return token, nil
+}
+
+// callbackServer is the local loopback server that catches Google's
+// redirect. It always runs, even in manual paste mode: it allocates the
+// real port that goes into the authorization URL.
+type callbackServer struct {
+	server *http.Server
+	url    string // full redirect URL (http://localhost:<port>/oauth/callback)
+	codeCh <-chan string
+	errCh  <-chan error
+}
+
+// startCallbackServer binds a loopback listener and serves the OAuth
+// callback handler on a random port. Call cleanup when done.
+func startCallbackServer() (*callbackServer, func(), error) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, nil, fmt.Errorf("listen: %w", err)
+	}
+
+	port := listener.Addr().(*net.TCPAddr).Port
 
 	codeCh := make(chan string, 1)
 	errCh := make(chan error, 1)
@@ -113,46 +310,19 @@ func (a *Authenticator) Login(ctx context.Context) (*oauth2.Token, error) {
 	})
 
 	server := &http.Server{Handler: mux}
-	go server.Serve(listener)
-	defer server.Close()
+	go server.Serve(listener) //nolint:errcheck // listener already bound
 
-	// Open browser
-	fmt.Println("\n📎 Opening browser for Google authorization...")
-	if err := openBrowser(authURL); err != nil {
-		fmt.Printf("Could not open browser automatically.\n")
-		fmt.Printf("Open this URL manually:\n%s\n", authURL)
-	} else {
-		fmt.Println("Check your browser and authorize the application.")
+	cleanup := func() {
+		server.Close()
+		listener.Close()
 	}
 
-	// Wait for the auth code
-	var authCode string
-	select {
-	case authCode = <-codeCh:
-		fmt.Println("✓ Authorization code received, exchanging for tokens...")
-	case err := <-errCh:
-		return nil, fmt.Errorf("callback: %w", err)
-	case <-ctx.Done():
-		return nil, fmt.Errorf("login cancelled")
-	}
-
-	// Exchange code for token (PKCE verifier is required here)
-	token, err := a.OAuthConfig.Exchange(ctx, authCode,
-		oauth2.SetAuthURLParam("code_verifier", pkce.CodeVerifier),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("token exchange: %w", err)
-	}
-
-	a.Token = token
-
-	// Save token to disk
-	if err := saveOAuthToken(token); err != nil {
-		log.Printf("Warning: could not save token: %v", err)
-	}
-
-	fmt.Println("✓ Authentication successful!")
-	return token, nil
+	return &callbackServer{
+		server: server,
+		url:    fmt.Sprintf("http://localhost:%d%s", port, redirectPath),
+		codeCh: codeCh,
+		errCh:  errCh,
+	}, cleanup, nil
 }
 
 // TokenSource returns a TokenSource that auto-refreshes the OAuth token.

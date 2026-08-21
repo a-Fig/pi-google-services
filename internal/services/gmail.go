@@ -235,10 +235,10 @@ func (s *GmailService) handleSearchEmails(ctx context.Context, params json.RawMe
 
 func (s *GmailService) handleSendEmail(ctx context.Context, params json.RawMessage) (interface{}, *mcp.RPCError) {
 	var args struct {
-		To          string             `json:"to"`
-		Subject     string             `json:"subject"`
-		Body        string             `json:"body"`
-		Attachments []attachmentInput  `json:"attachments"`
+		To          string            `json:"to"`
+		Subject     string            `json:"subject"`
+		Body        string            `json:"body"`
+		Attachments []attachmentInput `json:"attachments"`
 	}
 	if err := json.Unmarshal(params, &args); err != nil {
 		return nil, &mcp.RPCError{Code: -32602, Message: "Invalid arguments", Data: err.Error()}
