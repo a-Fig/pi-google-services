@@ -61,6 +61,7 @@ func (s *CalendarService) Tools() []mcp.ToolDefinition {
 					"location":    {Type: "string", Description: "Event location"},
 					"attendees":   {Type: "string", Description: "Comma-separated email addresses"},
 					"withMeet":    {Type: "boolean", Description: "Add Google Meet link (default: false)"},
+					"colorId":     {Type: "string", Description: "Google Calendar event color ID (for example: 11 Tomato, 3 Grape)"},
 				},
 				Required: []string{"summary", "startTime", "endTime"},
 			},
@@ -71,11 +72,14 @@ func (s *CalendarService) Tools() []mcp.ToolDefinition {
 			InputSchema: mcp.InputSchema{
 				Type: "object",
 				Properties: map[string]mcp.PropertySchema{
-					"calendarId": {Type: "string", Description: "Calendar ID (default: primary)"},
-					"eventId":    {Type: "string", Description: "Event ID to update"},
-					"summary":    {Type: "string", Description: "New title"},
-					"startTime":  {Type: "string", Description: "New start time (ISO 8601)"},
-					"endTime":    {Type: "string", Description: "New end time (ISO 8601)"},
+					"calendarId":  {Type: "string", Description: "Calendar ID (default: primary)"},
+					"eventId":     {Type: "string", Description: "Event ID to update"},
+					"summary":     {Type: "string", Description: "New title"},
+					"description": {Type: "string", Description: "New description"},
+					"location":    {Type: "string", Description: "New location"},
+					"startTime":   {Type: "string", Description: "New start time (ISO 8601)"},
+					"endTime":     {Type: "string", Description: "New end time (ISO 8601)"},
+					"colorId":     {Type: "string", Description: "New Google Calendar event color ID"},
 				},
 				Required: []string{"eventId"},
 			},
@@ -98,6 +102,7 @@ func (s *CalendarService) Tools() []mcp.ToolDefinition {
 			InputSchema: mcp.InputSchema{
 				Type: "object",
 				Properties: map[string]mcp.PropertySchema{
+					"calendarId": {Type: "string", Description: "Calendar ID to search (default: primary)"},
 					"query":      {Type: "string", Description: "Search query text"},
 					"maxResults": {Type: "number", Description: "Max results (default: 50)", Default: 50},
 				},
@@ -190,6 +195,7 @@ func (s *CalendarService) handleCreateEvent(ctx context.Context, params json.Raw
 		Location    string `json:"location"`
 		Attendees   string `json:"attendees"`
 		WithMeet    bool   `json:"withMeet"`
+		ColorID     string `json:"colorId"`
 	}
 	if err := json.Unmarshal(params, &args); err != nil {
 		return nil, &mcp.RPCError{Code: -32602, Message: "Invalid arguments", Data: err.Error()}
@@ -204,6 +210,7 @@ func (s *CalendarService) handleCreateEvent(ctx context.Context, params json.Raw
 		Location:    args.Location,
 		Start:       &gcal.EventDateTime{DateTime: args.StartTime},
 		End:         &gcal.EventDateTime{DateTime: args.EndTime},
+		ColorId:     args.ColorID,
 	}
 	if args.Attendees != "" {
 		for _, email := range strings.Split(args.Attendees, ",") {
@@ -216,7 +223,7 @@ func (s *CalendarService) handleCreateEvent(ctx context.Context, params json.Raw
 
 	created, err := s.api.CreateEvent(ctx, args.CalendarID, event, args.WithMeet)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to create event", Data: err.Error()}
+		return nil, calendarRPCError("create event", err)
 	}
 
 	meetInfo := ""
@@ -232,16 +239,27 @@ func (s *CalendarService) handleCreateEvent(ctx context.Context, params json.Raw
 	if args.Attendees != "" {
 		attendeesInfo = fmt.Sprintf("\nAttendees: %s", args.Attendees)
 	}
-	return contentResponse(fmt.Sprintf("✅ Event created: %s\nID: %s\nLink: %s%s%s", created.Summary, created.Id, created.HtmlLink, meetInfo, attendeesInfo)), nil
+	calendarInfo := args.CalendarID
+	if calendarInfo == "" {
+		calendarInfo = "primary"
+	}
+	colorInfo := ""
+	if created.ColorId != "" {
+		colorInfo = fmt.Sprintf("\nColor ID: %s", created.ColorId)
+	}
+	return contentResponse(fmt.Sprintf("✅ Event created: %s\nID: %s\nCalendar: %s%s\nLink: %s%s%s", created.Summary, created.Id, calendarInfo, colorInfo, created.HtmlLink, meetInfo, attendeesInfo)), nil
 }
 
 func (s *CalendarService) handleUpdateEvent(ctx context.Context, params json.RawMessage) (interface{}, *mcp.RPCError) {
 	var args struct {
-		CalendarID string `json:"calendarId"`
-		EventID    string `json:"eventId"`
-		Summary    string `json:"summary"`
-		StartTime  string `json:"startTime"`
-		EndTime    string `json:"endTime"`
+		CalendarID  string `json:"calendarId"`
+		EventID     string `json:"eventId"`
+		Summary     string `json:"summary"`
+		Description string `json:"description"`
+		Location    string `json:"location"`
+		StartTime   string `json:"startTime"`
+		EndTime     string `json:"endTime"`
+		ColorID     string `json:"colorId"`
 	}
 	if err := json.Unmarshal(params, &args); err != nil {
 		return nil, &mcp.RPCError{Code: -32602, Message: "Invalid arguments", Data: err.Error()}
@@ -254,6 +272,15 @@ func (s *CalendarService) handleUpdateEvent(ctx context.Context, params json.Raw
 	if args.Summary != "" {
 		event.Summary = args.Summary
 	}
+	if args.Description != "" {
+		event.Description = args.Description
+	}
+	if args.Location != "" {
+		event.Location = args.Location
+	}
+	if args.ColorID != "" {
+		event.ColorId = args.ColorID
+	}
 	if args.StartTime != "" {
 		event.Start = &gcal.EventDateTime{DateTime: args.StartTime}
 	}
@@ -263,7 +290,7 @@ func (s *CalendarService) handleUpdateEvent(ctx context.Context, params json.Raw
 
 	updated, err := s.api.UpdateEvent(ctx, args.CalendarID, args.EventID, event)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to update event", Data: err.Error()}
+		return nil, calendarRPCError("update event", err)
 	}
 	return contentResponse(fmt.Sprintf("✅ Event updated: %s\nLink: %s", updated.Summary, updated.HtmlLink)), nil
 }
@@ -280,13 +307,14 @@ func (s *CalendarService) handleDeleteEvent(ctx context.Context, params json.Raw
 		return nil, &mcp.RPCError{Code: -32602, Message: "eventId required"}
 	}
 	if err := s.api.DeleteEvent(ctx, args.CalendarID, args.EventID); err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to delete event", Data: err.Error()}
+		return nil, calendarRPCError("delete event", err)
 	}
 	return contentResponse(fmt.Sprintf("✅ Event deleted (ID: %s)", args.EventID)), nil
 }
 
 func (s *CalendarService) handleSearchEvents(ctx context.Context, params json.RawMessage) (interface{}, *mcp.RPCError) {
 	var args struct {
+		CalendarID string `json:"calendarId"`
 		Query      string `json:"query"`
 		MaxResults int64  `json:"maxResults"`
 	}
@@ -296,7 +324,7 @@ func (s *CalendarService) handleSearchEvents(ctx context.Context, params json.Ra
 	if args.Query == "" {
 		return nil, &mcp.RPCError{Code: -32602, Message: "query required"}
 	}
-	events, err := s.api.SearchEvents(ctx, args.Query, args.MaxResults)
+	events, err := s.api.SearchEvents(ctx, args.CalendarID, args.Query, args.MaxResults)
 	if err != nil {
 		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to search", Data: err.Error()}
 	}
@@ -315,6 +343,10 @@ func (s *CalendarService) handleListCalendars(ctx context.Context, _ json.RawMes
 			b.WriteString(" (primary)")
 		}
 		b.WriteString(fmt.Sprintf("\n  ID: %s\n", cal.Id))
+		b.WriteString(fmt.Sprintf("  Access: %s\n", cal.AccessRole))
+		if cal.BackgroundColor != "" {
+			b.WriteString(fmt.Sprintf("  Color: %s\n", cal.BackgroundColor))
+		}
 		if cal.Description != "" {
 			b.WriteString(fmt.Sprintf("  %s\n", cal.Description))
 		}
@@ -374,6 +406,14 @@ func (s *CalendarService) handleFreeBusy(ctx context.Context, params json.RawMes
 
 // helpers
 
+func calendarRPCError(operation string, err error) *mcp.RPCError {
+	// Put the Google API detail in Message as well as Data. Some MCP clients hide
+	// error.Data, which previously reduced useful errors (such as requiredAccessLevel)
+	// to the unhelpful text "Failed to create event".
+	message := fmt.Sprintf("Failed to %s: %v", operation, err)
+	return &mcp.RPCError{Code: -32603, Message: message, Data: err.Error()}
+}
+
 func contentResponse(text string) map[string]interface{} {
 	return map[string]interface{}{
 		"content": []map[string]interface{}{
@@ -388,7 +428,10 @@ func formatEvents(events []*calendar.EventSummary) string {
 	}
 	var b strings.Builder
 	for i, e := range events {
-		b.WriteString(fmt.Sprintf("%d. %s\n   📅 %s → %s", i+1, e.Summary, e.Start, e.End))
+		b.WriteString(fmt.Sprintf("%d. %s\n   ID: %s\n   Calendar: %s\n   📅 %s → %s", i+1, e.Summary, e.ID, e.CalendarID, e.Start, e.End))
+		if e.ColorID != "" {
+			b.WriteString(fmt.Sprintf("\n   Color ID: %s", e.ColorID))
+		}
 		if e.Description != "" {
 			desc := strings.ReplaceAll(e.Description, "\n", "\n   ")
 			b.WriteString(fmt.Sprintf("\n   📝 %s", desc))

@@ -19,6 +19,8 @@ type Service struct {
 // EventSummary is a simplified calendar event for display.
 type EventSummary struct {
 	ID          string `json:"id"`
+	CalendarID  string `json:"calendar_id"`
+	ColorID     string `json:"color_id,omitempty"`
 	Summary     string `json:"summary"`
 	Description string `json:"description,omitempty"`
 	Start       string `json:"start"`
@@ -61,11 +63,13 @@ func (s *Service) ListEvents(ctx context.Context, calendarID string, timeMin, ti
 	result := make([]*EventSummary, 0, len(events.Items))
 	for _, e := range events.Items {
 		se := &EventSummary{
-			ID:       e.Id,
-			Summary:  e.Summary,
-			Start:    fmtDateTime(e.Start),
-			End:      fmtDateTime(e.End),
-			HTMLLink: e.HtmlLink,
+			ID:         e.Id,
+			CalendarID: calendarID,
+			ColorID:    e.ColorId,
+			Summary:    e.Summary,
+			Start:      fmtDateTime(e.Start),
+			End:        fmtDateTime(e.End),
+			HTMLLink:   e.HtmlLink,
 		}
 		if e.Description != "" {
 			se.Description = truncate(e.Description, 200)
@@ -108,12 +112,12 @@ func (s *Service) CreateEvent(ctx context.Context, calendarID string, event *gca
 	return created, nil
 }
 
-// UpdateEvent patches an existing event.
+// UpdateEvent patches an existing event, preserving fields that were not supplied.
 func (s *Service) UpdateEvent(ctx context.Context, calendarID, eventID string, event *gcal.Event) (*gcal.Event, error) {
 	if calendarID == "" {
 		calendarID = "primary"
 	}
-	updated, err := s.svc.Events.Update(calendarID, eventID, event).Do()
+	updated, err := s.svc.Events.Patch(calendarID, eventID, event).Do()
 	if err != nil {
 		return nil, fmt.Errorf("update event: %w", err)
 	}
@@ -128,12 +132,15 @@ func (s *Service) DeleteEvent(ctx context.Context, calendarID, eventID string) e
 	return s.svc.Events.Delete(calendarID, eventID).Do()
 }
 
-// SearchEvents queries events by text.
-func (s *Service) SearchEvents(ctx context.Context, query string, maxResults int64) ([]*EventSummary, error) {
+// SearchEvents queries events by text on one calendar.
+func (s *Service) SearchEvents(ctx context.Context, calendarID, query string, maxResults int64) ([]*EventSummary, error) {
+	if calendarID == "" {
+		calendarID = "primary"
+	}
 	if maxResults <= 0 {
 		maxResults = 50
 	}
-	events, err := s.svc.Events.List("primary").
+	events, err := s.svc.Events.List(calendarID).
 		Q(query).
 		MaxResults(maxResults).
 		OrderBy("startTime").
@@ -145,10 +152,13 @@ func (s *Service) SearchEvents(ctx context.Context, query string, maxResults int
 	result := make([]*EventSummary, 0, len(events.Items))
 	for _, e := range events.Items {
 		result = append(result, &EventSummary{
-			ID:      e.Id,
-			Summary: e.Summary,
-			Start:   fmtDateTime(e.Start),
-			End:     fmtDateTime(e.End),
+			ID:         e.Id,
+			CalendarID: calendarID,
+			ColorID:    e.ColorId,
+			Summary:    e.Summary,
+			Start:      fmtDateTime(e.Start),
+			End:        fmtDateTime(e.End),
+			HTMLLink:   e.HtmlLink,
 		})
 	}
 	return result, nil

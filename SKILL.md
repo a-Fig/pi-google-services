@@ -47,6 +47,7 @@ Arguments:
 - `description` — event description
 - `location` — event location
 - `calendarId` — target calendar (default: primary)
+- `colorId` — Google Calendar event color ID (for example `11` Tomato, `3` Grape)
 
 ### `update-event`
 Modify an existing event.
@@ -57,7 +58,7 @@ Examples:
 
 Arguments:
 - `eventId` (required) — event to modify
-- `summary`, `startTime`, `endTime` — fields to update
+- `summary`, `description`, `location`, `startTime`, `endTime`, `colorId` — fields to patch
 - `calendarId` — target calendar (default: primary)
 
 ### `delete-event`
@@ -80,10 +81,12 @@ Examples:
 
 Arguments:
 - `query` (required) — text to search
+- `calendarId` — calendar to search (default: primary)
 - `maxResults` — max results (default: 50)
 
 ### `list-calendars`
-List all available calendars.
+List all available calendars, including each calendar ID, access role, and color. Shared-calendar
+writes require `writer` or `owner` access.
 
 Examples:
 - "mostrame mis calendarios"

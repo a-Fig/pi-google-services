@@ -26,7 +26,7 @@ import (
 	"github.com/sombi/pi-google-services/internal/tasks"
 )
 
-const version = "0.1.19"
+const version = "0.1.20-afig.1"
 
 func main() {
 	log.SetFlags(0)

@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.1.20-afig.1
+
+- **Calendar event colors** — `create-event` and `update-event` accept `colorId`.
+- **Shared-calendar diagnostics** — `list-calendars` reports access roles and calendar colors; Google API error details are visible in the main MCP error message.
+- **Safer event updates** — updates use PATCH so omitted fields are preserved.
+- **Multi-calendar search** — `search-events` accepts `calendarId`.
+- **Actionable event results** — list/search output includes event ID, calendar ID, and color ID.
+- **Reliable OAuth restarts** — refreshed access tokens are persisted, and server startup refreshes once instead of trusting a stale token file that can produce 401s.
+
 ## v0.1.19
 
 - **Feature: headless login (`--no-browser`)** — `login` and `setup` now accept `--no-browser` for machines without a browser (SSH, VPS, containers, WSL with broken localhost forwarding). The tool prints the authorization URL; you open it on any device (phone included), approve, and paste back the redirected URL. PKCE is preserved end-to-end.

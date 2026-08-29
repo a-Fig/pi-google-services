@@ -325,9 +325,41 @@ func startCallbackServer() (*callbackServer, func(), error) {
 	}, cleanup, nil
 }
 
-// TokenSource returns a TokenSource that auto-refreshes the OAuth token.
+// TokenSource returns a TokenSource that refreshes on startup and persists refreshed tokens.
+// The old implementation refreshed only in memory. After a long-running server refreshed its
+// token, a restarted server could reload the stale access token from disk and receive 401s.
 func (a *Authenticator) TokenSource(ctx context.Context, token *oauth2.Token) oauth2.TokenSource {
-	return a.OAuthConfig.TokenSource(ctx, token)
+	startupToken := new(oauth2.Token)
+	*startupToken = *token
+	if startupToken.RefreshToken != "" {
+		// Force one refresh per server start. This avoids trusting a stale or revoked access token
+		// whose persisted expiry still appears valid.
+		startupToken.Expiry = time.Now().Add(-time.Hour)
+	}
+	return &persistingTokenSource{
+		source: a.OAuthConfig.TokenSource(ctx, startupToken),
+		save:   saveOAuthToken,
+	}
+}
+
+type persistingTokenSource struct {
+	source          oauth2.TokenSource
+	save            func(*oauth2.Token) error
+	lastAccessToken string
+}
+
+func (s *persistingTokenSource) Token() (*oauth2.Token, error) {
+	token, err := s.source.Token()
+	if err != nil {
+		return nil, err
+	}
+	if token.AccessToken != s.lastAccessToken {
+		if err := s.save(token); err != nil {
+			log.Printf("Warning: could not persist refreshed token: %v", err)
+		}
+		s.lastAccessToken = token.AccessToken
+	}
+	return token, nil
 }
 
 // saveOAuthToken persists the token to the config directory.

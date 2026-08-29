@@ -3,10 +3,13 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/sombi/pi-google-services/internal/calendar"
+	"github.com/sombi/pi-google-services/internal/mcp"
 )
 
 // mockCalendarAPI implements calendar operations without real API calls.
@@ -72,6 +75,49 @@ func TestCalendarServiceTools(t *testing.T) {
 		if !names[name] {
 			t.Errorf("missing tool: %s", name)
 		}
+	}
+}
+
+func TestCalendarToolSchemasExposeSharedCalendarFeatures(t *testing.T) {
+	tools := (&CalendarService{}).Tools()
+	byName := make(map[string]map[string]mcp.PropertySchema, len(tools))
+	for _, tool := range tools {
+		byName[tool.Name] = tool.InputSchema.Properties
+	}
+
+	for _, toolName := range []string{"create-event", "update-event"} {
+		if _, ok := byName[toolName]["calendarId"]; !ok {
+			t.Errorf("%s missing calendarId", toolName)
+		}
+		if _, ok := byName[toolName]["colorId"]; !ok {
+			t.Errorf("%s missing colorId", toolName)
+		}
+	}
+	if _, ok := byName["search-events"]["calendarId"]; !ok {
+		t.Error("search-events missing calendarId")
+	}
+}
+
+func TestFormatEventsIncludesIDsCalendarAndColor(t *testing.T) {
+	got := formatEvents([]*calendar.EventSummary{{
+		ID:         "event-123",
+		CalendarID: "school@example.com",
+		ColorID:    "11",
+		Summary:    "Calc 1 Exam",
+		Start:      "Sun Aug 30 13:00 PDT",
+		End:        "Sun Aug 30 15:00 PDT",
+	}})
+	for _, want := range []string{"event-123", "school@example.com", "Color ID: 11"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("formatEvents() missing %q in %q", want, got)
+		}
+	}
+}
+
+func TestCalendarRPCErrorSurfacesGoogleDetail(t *testing.T) {
+	rpcErr := calendarRPCError("create event", errors.New("requiredAccessLevel"))
+	if !strings.Contains(rpcErr.Message, "requiredAccessLevel") {
+		t.Fatalf("error message hid API detail: %q", rpcErr.Message)
 	}
 }
 

@@ -48,8 +48,8 @@ After updating, restart your Pi session.
 | Tool | Description |
 |------|-------------|
 | `list-events` | List events in a date range |
-| `create-event` | Create event with attendees + Meet link |
-| `update-event` | Modify existing event |
+| `create-event` | Create event on any writable calendar, with event color, attendees, and Meet link |
+| `update-event` | Patch an existing event, including its color |
 | `delete-event` | Remove event |
 | `search-events` | Search by text |
 | `list-calendars` | Show all calendars |
@@ -91,6 +91,28 @@ Each attachment can reference a local file or a Google Drive file:
 | `create-task` | Create a new task |
 | `complete-task` | Mark task as done |
 | `delete-task` | Remove a task |
+
+### Calendar selection, permissions, and colors
+
+Pass `calendarId` to create, update, delete, search, or list events on a non-primary calendar.
+`list-calendars` reports each calendar's `Access` role so you can verify that shared calendars are
+writable (`writer` or `owner`) instead of discovering a read-only share through a failed write.
+Calendar API errors are returned with their underlying Google detail.
+
+Pass `colorId` to `create-event` or `update-event` to set the event color. Example:
+
+```json
+{
+  "summary": "Calc 1 Exam",
+  "startTime": "2026-08-30T13:00:00-07:00",
+  "endTime": "2026-08-30T15:00:00-07:00",
+  "calendarId": "school-calendar-id@group.calendar.google.com",
+  "colorId": "11"
+}
+```
+
+Event list/search results include the event ID, calendar ID, and color ID so follow-up updates and
+deletes can target the correct event.
 
 ### Meet
 

@@ -287,6 +287,38 @@ func TestLoginBrowserFlowEndToEnd(t *testing.T) {
 	}
 }
 
+type staticTokenSource struct {
+	token *oauth2.Token
+	err   error
+}
+
+func (s staticTokenSource) Token() (*oauth2.Token, error) { return s.token, s.err }
+
+func TestPersistingTokenSourceSavesOnlyChangedTokens(t *testing.T) {
+	token := &oauth2.Token{AccessToken: "fresh", RefreshToken: "refresh"}
+	saves := 0
+	source := &persistingTokenSource{
+		source: staticTokenSource{token: token},
+		save: func(got *oauth2.Token) error {
+			saves++
+			if got.AccessToken != "fresh" {
+				t.Errorf("saved access token = %q", got.AccessToken)
+			}
+			return nil
+		},
+	}
+
+	if _, err := source.Token(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := source.Token(); err != nil {
+		t.Fatal(err)
+	}
+	if saves != 1 {
+		t.Fatalf("saved %d times, want 1", saves)
+	}
+}
+
 func TestLoginManualModeUsesRealLoopbackPort(t *testing.T) {
 	defer withTempConfigDir(t)
 	a, _ := newTestAuthenticator(t, fakeTokenJSON)
