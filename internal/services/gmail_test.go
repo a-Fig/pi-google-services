@@ -165,16 +165,17 @@ func TestFormatAttachments_ListsIDsAndSizes(t *testing.T) {
 	}
 }
 
-func TestHumanSize(t *testing.T) {
+func TestFmtSize(t *testing.T) {
 	cases := map[int64]string{
-		0:       "0 B",
-		512:     "512 B",
-		2048:    "2.0 KB",
-		3145728: "3.0 MB",
+		0:          "0 B",
+		512:        "512 B",
+		2048:       "2.0 KB",
+		3145728:    "3.0 MB",
+		2147483648: "2.0 GB",
 	}
 	for in, want := range cases {
-		if got := humanSize(in); got != want {
-			t.Errorf("humanSize(%d) = %q, want %q", in, got, want)
+		if got := fmtSize(in); got != want {
+			t.Errorf("fmtSize(%d) = %q, want %q", in, got, want)
 		}
 	}
 }

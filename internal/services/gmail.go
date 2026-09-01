@@ -339,7 +339,7 @@ func (s *GmailService) handleDownloadAttachment(ctx context.Context, params json
 	}
 
 	result := fmt.Sprintf("💾 Saved %s (%s, %s)\n📁 %s",
-		att.Filename, att.MimeType, humanSize(int64(len(att.Data))), dest)
+		att.Filename, att.MimeType, fmtSize(int64(len(att.Data))), dest)
 	return contentResponse(result), nil
 }
 
@@ -357,22 +357,10 @@ func formatAttachments(atts []gmail.AttachmentInfo) string {
 			label = " (inline)"
 		}
 		fmt.Fprintf(&b, "%d. %s — %s, %s%s\n   id: %s\n",
-			i+1, a.Filename, a.MimeType, humanSize(a.Size), label, a.AttachmentID)
+			i+1, a.Filename, a.MimeType, fmtSize(a.Size), label, a.AttachmentID)
 	}
 	b.WriteString("\nUse download-attachment with the message ID and an attachment id to save one.")
 	return b.String()
-}
-
-// humanSize formats a byte count for display.
-func humanSize(n int64) string {
-	switch {
-	case n >= 1<<20:
-		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
-	case n >= 1<<10:
-		return fmt.Sprintf("%.1f KB", float64(n)/(1<<10))
-	default:
-		return fmt.Sprintf("%d B", n)
-	}
 }
 
 // resolveSavePath decides where an attachment lands. An empty savePath means

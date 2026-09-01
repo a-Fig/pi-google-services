@@ -7,6 +7,7 @@
 - Handles both storage models Gmail uses: large attachments fetched via `users.messages.attachments.get`, and small ones whose bytes ride inline in the MIME part (addressed by part ID).
 - Sender-supplied filenames are reduced to a single path element before being joined to a directory, so an attachment cannot be written outside the chosen destination.
 - Base64 decoding now tolerates unpadded base64url payloads, which also makes body extraction more robust.
+- Attachment sizes are rendered with the existing `fmtSize` helper shared with the Drive tools, which also covers GB.
 - 13 new unit tests (attachment extraction, part lookup, base64 decoding, save-path resolution, filename sanitization, display formatting).
 
 ## v0.1.19
