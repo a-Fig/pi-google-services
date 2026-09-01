@@ -151,17 +151,6 @@ func (s *Service) SendEmail(ctx context.Context, to, subject, body string, attac
 	return sent, nil
 }
 
-// ReplyToEmail replies to an existing thread with optional attachments.
-func (s *Service) ReplyToEmail(ctx context.Context, threadID, to, subject, body string, attachments []Attachment) (*gmail.Message, error) {
-	msg := createMessage(to, subject, body, attachments)
-	msg.ThreadId = threadID
-	sent, err := s.svc.Messages.Send("me", msg).Do()
-	if err != nil {
-		return nil, fmt.Errorf("reply: %w", err)
-	}
-	return sent, nil
-}
-
 // SearchEmails searches messages by query.
 func (s *Service) SearchEmails(ctx context.Context, query string, maxResults int64) ([]*EmailSummary, error) {
 	return s.ListInbox(ctx, maxResults, query)
@@ -195,10 +184,17 @@ func extractBody(part *gmail.MessagePart, depth int) (body string, html bool) {
 }
 
 func createMessage(to, subject, body string, attachments []Attachment) *gmail.Message {
+	return buildMessage(to, subject, body, attachments, "")
+}
+
+// buildMessage assembles the RFC 5322 message. extraHeaders is inserted verbatim
+// after Subject and must already be CRLF-terminated; replies use it to carry
+// In-Reply-To and References.
+func buildMessage(to, subject, body string, attachments []Attachment, extraHeaders string) *gmail.Message {
 	encSubject := mime.BEncoding.Encode("UTF-8", subject)
 
 	if len(attachments) == 0 {
-		msg := fmt.Sprintf("From: me\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"UTF-8\"\r\n\r\n%s", to, encSubject, body)
+		msg := fmt.Sprintf("From: me\r\nTo: %s\r\nSubject: %s\r\n%sMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"UTF-8\"\r\n\r\n%s", to, encSubject, extraHeaders, body)
 		encoded := base64.URLEncoding.EncodeToString([]byte(msg))
 		return &gmail.Message{Raw: encoded}
 	}
@@ -206,7 +202,7 @@ func createMessage(to, subject, body string, attachments []Attachment) *gmail.Me
 	boundary := fmt.Sprintf("pi-google-%d", time.Now().UnixNano())
 
 	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "From: me\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"%s\"\r\n\r\n", to, encSubject, boundary)
+	fmt.Fprintf(&buf, "From: me\r\nTo: %s\r\nSubject: %s\r\n%sMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"%s\"\r\n\r\n", to, encSubject, extraHeaders, boundary)
 
 	fmt.Fprintf(&buf, "--%s\r\nContent-Type: text/plain; charset=\"UTF-8\"\r\n\r\n%s\r\n", boundary, body)
 
