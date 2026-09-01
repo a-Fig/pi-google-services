@@ -115,11 +115,12 @@ Arguments:
 - `query` — optional Gmail search filter
 
 ### `get-email`
-Read a full email by ID.
+Read a full email by ID. Any attachments are listed after the body with their filename, type, size and attachment ID.
 
 Examples:
 - "leé el primer email de la lista"
 - "mostrame el contenido completo del mail de belo"
+- "qué archivos tiene adjuntos ese mail?"
 
 Arguments:
 - `id` (required) — email message ID
@@ -164,6 +165,19 @@ Arguments:
 - `subject` (required) — reply subject
 - `body` — reply body text
 - `attachments` — array of files to attach. Each item can have `localPath` (local file) or `driveFileId` (Google Drive file ID)
+
+### `download-attachment`
+Save an attachment from a received email to disk. `get-email` lists each attachment's ID, filename, type and size — pass one of those IDs here.
+
+Examples:
+- "descargá el PDF adjunto del mail de Natalia"
+- "guardá el adjunto de ese email en /home/user/downloads"
+- "buscá mails con `has:attachment` de esta semana y bajá el Excel"
+
+Arguments:
+- `messageId` (required) — email message ID
+- `attachmentId` (required) — attachment ID from `get-email`
+- `savePath` — destination file, or a directory to save under the original filename (default: system temp directory)
 
 ## Tasks tools
 

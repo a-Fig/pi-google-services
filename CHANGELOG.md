@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Receiving attachments**: `get-email` now lists the attachments on a message — filename, MIME type, size, inline flag and the attachment ID needed to fetch it.
+- **New tool `download-attachment`**: saves an attachment from a received email to disk by message ID + attachment ID. `savePath` accepts a directory (saves under the original filename), a full file path, or is omitted for the system temp directory.
+- Handles both storage models Gmail uses: large attachments fetched via `users.messages.attachments.get`, and small ones whose bytes ride inline in the MIME part (addressed by part ID).
+- Sender-supplied filenames are reduced to a single path element before being joined to a directory, so an attachment cannot be written outside the chosen destination.
+- Base64 decoding now tolerates unpadded base64url payloads, which also makes body extraction more robust.
+- 13 new unit tests (attachment extraction, part lookup, base64 decoding, save-path resolution, filename sanitization, display formatting).
+
 ## v0.1.19
 
 - **Feature: headless login (`--no-browser`)** — `login` and `setup` now accept `--no-browser` for machines without a browser (SSH, VPS, containers, WSL with broken localhost forwarding). The tool prints the authorization URL; you open it on any device (phone included), approve, and paste back the redirected URL. PKCE is preserved end-to-end.

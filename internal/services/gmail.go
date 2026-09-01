@@ -122,6 +122,19 @@ func (s *GmailService) Tools() []mcp.ToolDefinition {
 				Required: []string{"threadId", "to", "subject", "body"},
 			},
 		},
+		{
+			Name:        "download-attachment",
+			Description: "Download an attachment from a received email to a local file",
+			InputSchema: mcp.InputSchema{
+				Type: "object",
+				Properties: map[string]mcp.PropertySchema{
+					"messageId":    {Type: "string", Description: "Email message ID (from list-inbox or search-emails)"},
+					"attachmentId": {Type: "string", Description: "Attachment ID listed by get-email"},
+					"savePath":     {Type: "string", Description: "Destination file, or a directory to save under the original filename. Defaults to the system temp directory."},
+				},
+				Required: []string{"messageId", "attachmentId"},
+			},
+		},
 	}
 }
 
@@ -137,6 +150,8 @@ func (s *GmailService) Handle(ctx context.Context, toolName string, params json.
 		return s.handleSendEmail(ctx, params)
 	case "reply-to-email":
 		return s.handleReplyEmail(ctx, params)
+	case "download-attachment":
+		return s.handleDownloadAttachment(ctx, params)
 	default:
 		return nil, &mcp.RPCError{Code: -32601, Message: fmt.Sprintf("Gmail tool not found: %s", toolName)}
 	}
@@ -198,6 +213,7 @@ func (s *GmailService) handleGetEmail(ctx context.Context, params json.RawMessag
 
 	result := fmt.Sprintf("📧 %s\nFrom: %s\nTo: %s\nDate: %s\n\n%s",
 		detail.Subject, detail.From, detail.To, detail.Date, body)
+	result += formatAttachments(detail.Attachments)
 
 	return contentResponse(result), nil
 }
@@ -294,6 +310,97 @@ func (s *GmailService) handleReplyEmail(ctx context.Context, params json.RawMess
 		result += fmt.Sprintf("\n📎 Attachments: %d", len(attachments))
 	}
 	return contentResponse(result), nil
+}
+
+func (s *GmailService) handleDownloadAttachment(ctx context.Context, params json.RawMessage) (interface{}, *mcp.RPCError) {
+	var args struct {
+		MessageID    string `json:"messageId"`
+		AttachmentID string `json:"attachmentId"`
+		SavePath     string `json:"savePath"`
+	}
+	if err := json.Unmarshal(params, &args); err != nil {
+		return nil, &mcp.RPCError{Code: -32602, Message: "Invalid arguments", Data: err.Error()}
+	}
+	if args.MessageID == "" || args.AttachmentID == "" {
+		return nil, &mcp.RPCError{Code: -32602, Message: "messageId and attachmentId required"}
+	}
+
+	att, err := s.api.GetAttachment(ctx, args.MessageID, args.AttachmentID)
+	if err != nil {
+		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to download attachment", Data: err.Error()}
+	}
+
+	dest := resolveSavePath(args.SavePath, att.Filename)
+	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to create destination directory", Data: err.Error()}
+	}
+	if err := os.WriteFile(dest, att.Data, 0600); err != nil {
+		return nil, &mcp.RPCError{Code: -32603, Message: fmt.Sprintf("Failed to write %s", dest), Data: err.Error()}
+	}
+
+	result := fmt.Sprintf("💾 Saved %s (%s, %s)\n📁 %s",
+		att.Filename, att.MimeType, humanSize(int64(len(att.Data))), dest)
+	return contentResponse(result), nil
+}
+
+// formatAttachments renders the attachment list appended to a read email.
+func formatAttachments(atts []gmail.AttachmentInfo) string {
+	if len(atts) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "\n\n📎 Attachments (%d):\n", len(atts))
+	for i, a := range atts {
+		label := ""
+		if a.Inline {
+			label = " (inline)"
+		}
+		fmt.Fprintf(&b, "%d. %s — %s, %s%s\n   id: %s\n",
+			i+1, a.Filename, a.MimeType, humanSize(a.Size), label, a.AttachmentID)
+	}
+	b.WriteString("\nUse download-attachment with the message ID and an attachment id to save one.")
+	return b.String()
+}
+
+// humanSize formats a byte count for display.
+func humanSize(n int64) string {
+	switch {
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%.1f KB", float64(n)/(1<<10))
+	default:
+		return fmt.Sprintf("%d B", n)
+	}
+}
+
+// resolveSavePath decides where an attachment lands. An empty savePath means
+// the system temp directory; a savePath that is (or looks like) a directory
+// gets the attachment's own filename appended; anything else is used verbatim.
+func resolveSavePath(savePath, filename string) string {
+	if savePath == "" {
+		return filepath.Join(os.TempDir(), safeFilename(filename))
+	}
+	if strings.HasSuffix(savePath, string(os.PathSeparator)) {
+		return filepath.Join(savePath, safeFilename(filename))
+	}
+	if info, err := os.Stat(savePath); err == nil && info.IsDir() {
+		return filepath.Join(savePath, safeFilename(filename))
+	}
+	return savePath
+}
+
+// safeFilename reduces a sender-controlled filename to a single path element so
+// an attachment can never be written outside the chosen directory.
+func safeFilename(name string) string {
+	name = strings.ReplaceAll(name, "\\", "/")
+	name = filepath.Base(strings.TrimSpace(name))
+	name = strings.ReplaceAll(name, "\x00", "")
+	if name == "" || name == "." || name == ".." || name == string(os.PathSeparator) {
+		return "attachment"
+	}
+	return name
 }
 
 // attachmentInput is the JSON shape accepted by the tool schema.

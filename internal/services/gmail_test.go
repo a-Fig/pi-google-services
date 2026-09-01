@@ -4,7 +4,10 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/sombi/pi-google-services/internal/gmail"
 )
 
 func TestResolveAttachments_Empty(t *testing.T) {
@@ -82,5 +85,96 @@ func TestResolveAttachments_LocalFileNotFound(t *testing.T) {
 	}
 	if err.Code != -32603 {
 		t.Errorf("error code = %d, want -32603", err.Code)
+	}
+}
+
+func TestResolveSavePath_DefaultsToTempDir(t *testing.T) {
+	got := resolveSavePath("", "report.pdf")
+	want := filepath.Join(os.TempDir(), "report.pdf")
+	if got != want {
+		t.Errorf("path = %q, want %q", got, want)
+	}
+}
+
+func TestResolveSavePath_ExistingDirectory(t *testing.T) {
+	tmp := t.TempDir()
+	got := resolveSavePath(tmp, "report.pdf")
+	want := filepath.Join(tmp, "report.pdf")
+	if got != want {
+		t.Errorf("path = %q, want %q", got, want)
+	}
+}
+
+func TestResolveSavePath_ExplicitFile(t *testing.T) {
+	got := resolveSavePath("/tmp/renamed.pdf", "report.pdf")
+	if got != "/tmp/renamed.pdf" {
+		t.Errorf("path = %q, want %q", got, "/tmp/renamed.pdf")
+	}
+}
+
+func TestResolveSavePath_TrailingSeparatorTreatedAsDir(t *testing.T) {
+	got := resolveSavePath("/tmp/nonexistent-dir/", "report.pdf")
+	want := filepath.Join("/tmp/nonexistent-dir", "report.pdf")
+	if got != want {
+		t.Errorf("path = %q, want %q", got, want)
+	}
+}
+
+func TestResolveSavePath_RejectsTraversalFilename(t *testing.T) {
+	tmp := t.TempDir()
+	got := resolveSavePath(tmp, "../../etc/passwd")
+	want := filepath.Join(tmp, "passwd")
+	if got != want {
+		t.Errorf("path = %q, want %q — sender filename escaped the directory", got, want)
+	}
+}
+
+func TestSafeFilename(t *testing.T) {
+	cases := map[string]string{
+		"report.pdf":            "report.pdf",
+		"../../etc/passwd":      "passwd",
+		"/absolute/path.txt":    "path.txt",
+		`..\..\windows\bad.exe`: "bad.exe",
+		"":                      "attachment",
+		"..":                    "attachment",
+		"/":                     "attachment",
+	}
+	for in, want := range cases {
+		if got := safeFilename(in); got != want {
+			t.Errorf("safeFilename(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestFormatAttachments_Empty(t *testing.T) {
+	if got := formatAttachments(nil); got != "" {
+		t.Errorf("expected empty string for no attachments, got %q", got)
+	}
+}
+
+func TestFormatAttachments_ListsIDsAndSizes(t *testing.T) {
+	out := formatAttachments([]gmail.AttachmentInfo{
+		{AttachmentID: "att-1", Filename: "report.pdf", MimeType: "application/pdf", Size: 2048},
+		{AttachmentID: "att-2", Filename: "logo.png", MimeType: "image/png", Size: 512, Inline: true},
+	})
+
+	for _, want := range []string{"report.pdf", "att-1", "2.0 KB", "logo.png", "(inline)", "512 B"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestHumanSize(t *testing.T) {
+	cases := map[int64]string{
+		0:       "0 B",
+		512:     "512 B",
+		2048:    "2.0 KB",
+		3145728: "3.0 MB",
+	}
+	for in, want := range cases {
+		if got := humanSize(in); got != want {
+			t.Errorf("humanSize(%d) = %q, want %q", in, got, want)
+		}
 	}
 }
