@@ -99,13 +99,13 @@ func (s *GmailService) Tools() []mcp.ToolDefinition {
 		},
 		{
 			Name:        "reply-to-email",
-			Description: "Reply to an email thread with optional file attachments",
+			Description: "Reply in-thread to an email, with optional file attachments. Recipient and subject come from the thread so the reply actually threads; normally pass only threadId and body.",
 			InputSchema: mcp.InputSchema{
 				Type: "object",
 				Properties: map[string]mcp.PropertySchema{
-					"threadId": {Type: "string", Description: "Thread ID to reply to"},
-					"to":       {Type: "string", Description: "Recipient email"},
-					"subject":  {Type: "string", Description: "Reply subject"},
+					"threadId": {Type: "string", Description: "Thread ID to reply to (thread_id from list-inbox, get-email, or search-emails)"},
+					"to":       {Type: "string", Description: "Optional. Recipient email. Defaults to the thread's Reply-To, else its From."},
+					"subject":  {Type: "string", Description: "Optional and normally omitted. Ignored when the thread has a subject: a reply whose subject differs reads as a separate email in most mail clients."},
 					"body":     {Type: "string", Description: "Reply body text"},
 					"attachments": {
 						Type:        "array",
@@ -119,7 +119,7 @@ func (s *GmailService) Tools() []mcp.ToolDefinition {
 						},
 					},
 				},
-				Required: []string{"threadId", "to", "subject", "body"},
+				Required: []string{"threadId", "body"},
 			},
 		},
 	}
@@ -275,8 +275,8 @@ func (s *GmailService) handleReplyEmail(ctx context.Context, params json.RawMess
 	if err := json.Unmarshal(params, &args); err != nil {
 		return nil, &mcp.RPCError{Code: -32602, Message: "Invalid arguments", Data: err.Error()}
 	}
-	if args.ThreadID == "" || args.To == "" || args.Subject == "" {
-		return nil, &mcp.RPCError{Code: -32602, Message: "threadId, to, subject required"}
+	if args.ThreadID == "" || args.Body == "" {
+		return nil, &mcp.RPCError{Code: -32602, Message: "threadId and body required"}
 	}
 
 	attachments, attErr := s.resolveAttachments(ctx, args.Attachments)
@@ -284,12 +284,18 @@ func (s *GmailService) handleReplyEmail(ctx context.Context, params json.RawMess
 		return nil, attErr
 	}
 
-	sent, err := s.api.ReplyToEmail(ctx, args.ThreadID, args.To, args.Subject, args.Body, attachments)
+	reply, err := s.api.ReplyToEmail(ctx, args.ThreadID, args.To, args.Subject, args.Body, attachments)
 	if err != nil {
 		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to reply", Data: err.Error()}
 	}
 
-	result := fmt.Sprintf("✅ Reply sent\nID: %s", sent.Id)
+	result := fmt.Sprintf("✅ Reply sent to %s\nSubject: %s\nID: %s\nThread: %s",
+		reply.To, reply.Subject, reply.Message.Id, reply.Message.ThreadId)
+	if !reply.Threaded {
+		// Gmail accepted the message but did not attach it to the conversation, so
+		// the recipient would see a new email. Report that instead of plain success.
+		result += "\nWarning: Gmail did not add this to the requested thread; it was delivered as a new conversation."
+	}
 	if len(attachments) > 0 {
 		result += fmt.Sprintf("\n📎 Attachments: %d", len(attachments))
 	}
