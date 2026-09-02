@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -15,6 +16,32 @@ import (
 
 	"github.com/sombi/pi-google-services/internal/config"
 )
+
+// TestMain points the config directory at a throwaway location for every test in
+// this package.
+//
+// This is a safety net, not a nicety. The login tests complete a full OAuth flow
+// against a fixture token and persist the result. If any of them reaches the real
+// config directory, it overwrites the user's live Google credentials with
+// "fake-at"/"fake-rt", and the only symptom is invalid_grant on every subsequent
+// API call -- with a token file that still looks structurally valid, and a
+// `status` command that still reports "authenticated".
+//
+// That is not hypothetical: four of these tests used `defer withTempConfigDir(t)`,
+// which defers the redirect until after the test body has already written to the
+// real path. Running `go test ./...` silently destroyed a live deployment's
+// credentials, twice. Per-test redirection is still correct and still used; this
+// makes a mistake in it harmless instead of destructive.
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "pi-google-services-auth-test")
+	if err != nil {
+		panic(err)
+	}
+	config.Dir = func() (string, error) { return dir, nil }
+	code := m.Run()
+	os.RemoveAll(dir)
+	os.Exit(code)
+}
 
 func TestParseAuthCode(t *testing.T) {
 	tests := []struct {
@@ -204,7 +231,7 @@ func withTempConfigDir(t *testing.T) string {
 const fakeTokenJSON = `{"access_token":"fake-at","refresh_token":"fake-rt","token_type":"Bearer","expires_in":3600}`
 
 func TestLoginManualMode(t *testing.T) {
-	defer withTempConfigDir(t)
+	withTempConfigDir(t)
 	a, _ := newTestAuthenticator(t, fakeTokenJSON)
 
 	var out strings.Builder
@@ -227,7 +254,7 @@ func TestLoginManualMode(t *testing.T) {
 }
 
 func TestLoginBrowserFailureFallsBackToManual(t *testing.T) {
-	defer withTempConfigDir(t)
+	withTempConfigDir(t)
 	a, _ := newTestAuthenticator(t, fakeTokenJSON)
 
 	var out strings.Builder
@@ -250,7 +277,7 @@ func TestLoginBrowserFailureFallsBackToManual(t *testing.T) {
 }
 
 func TestLoginBrowserFlowEndToEnd(t *testing.T) {
-	defer withTempConfigDir(t)
+	withTempConfigDir(t)
 	a, _ := newTestAuthenticator(t, fakeTokenJSON)
 
 	// Simulate Google: capture the auth URL from the browser stub, resolve
@@ -320,7 +347,7 @@ func TestPersistingTokenSourceSavesOnlyChangedTokens(t *testing.T) {
 }
 
 func TestLoginManualModeUsesRealLoopbackPort(t *testing.T) {
-	defer withTempConfigDir(t)
+	withTempConfigDir(t)
 	a, _ := newTestAuthenticator(t, fakeTokenJSON)
 
 	var out strings.Builder
