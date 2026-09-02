@@ -88,8 +88,17 @@ func TestResolveAttachments_LocalFileNotFound(t *testing.T) {
 	}
 }
 
+func mustResolve(t *testing.T, savePath, filename string) string {
+	t.Helper()
+	got, err := resolveSavePath(savePath, filename)
+	if err != nil {
+		t.Fatalf("resolveSavePath(%q, %q): %v", savePath, filename, err)
+	}
+	return got
+}
+
 func TestResolveSavePath_DefaultsToTempDir(t *testing.T) {
-	got := resolveSavePath("", "report.pdf")
+	got := mustResolve(t, "", "report.pdf")
 	want := filepath.Join(os.TempDir(), "report.pdf")
 	if got != want {
 		t.Errorf("path = %q, want %q", got, want)
@@ -98,7 +107,7 @@ func TestResolveSavePath_DefaultsToTempDir(t *testing.T) {
 
 func TestResolveSavePath_ExistingDirectory(t *testing.T) {
 	tmp := t.TempDir()
-	got := resolveSavePath(tmp, "report.pdf")
+	got := mustResolve(t, tmp, "report.pdf")
 	want := filepath.Join(tmp, "report.pdf")
 	if got != want {
 		t.Errorf("path = %q, want %q", got, want)
@@ -106,15 +115,17 @@ func TestResolveSavePath_ExistingDirectory(t *testing.T) {
 }
 
 func TestResolveSavePath_ExplicitFile(t *testing.T) {
-	got := resolveSavePath("/tmp/renamed.pdf", "report.pdf")
-	if got != "/tmp/renamed.pdf" {
-		t.Errorf("path = %q, want %q", got, "/tmp/renamed.pdf")
+	dir := t.TempDir()
+	explicit := filepath.Join(dir, "renamed.pdf")
+	if got := mustResolve(t, explicit, "report.pdf"); got != explicit {
+		t.Errorf("path = %q, want %q", got, explicit)
 	}
 }
 
 func TestResolveSavePath_TrailingSeparatorTreatedAsDir(t *testing.T) {
-	got := resolveSavePath("/tmp/nonexistent-dir/", "report.pdf")
-	want := filepath.Join("/tmp/nonexistent-dir", "report.pdf")
+	dir := filepath.Join(t.TempDir(), "nonexistent-dir") + string(os.PathSeparator)
+	got := mustResolve(t, dir, "report.pdf")
+	want := filepath.Join(strings.TrimSuffix(dir, string(os.PathSeparator)), "report.pdf")
 	if got != want {
 		t.Errorf("path = %q, want %q", got, want)
 	}
@@ -122,10 +133,44 @@ func TestResolveSavePath_TrailingSeparatorTreatedAsDir(t *testing.T) {
 
 func TestResolveSavePath_RejectsTraversalFilename(t *testing.T) {
 	tmp := t.TempDir()
-	got := resolveSavePath(tmp, "../../etc/passwd")
+	got := mustResolve(t, tmp, "../../etc/passwd")
 	want := filepath.Join(tmp, "passwd")
 	if got != want {
 		t.Errorf("path = %q, want %q — sender filename escaped the directory", got, want)
+	}
+}
+
+func TestResolveSavePath_ExpandsHome(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("no home directory")
+	}
+	got := mustResolve(t, "~/Downloads/", "report.pdf")
+	want := filepath.Join(home, "Downloads", "report.pdf")
+	if got != want {
+		t.Errorf("path = %q, want %q — a literal ~ directory would be created instead", got, want)
+	}
+}
+
+func TestResolveSavePath_RefusesHiddenDestinations(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("no home directory")
+	}
+	// An injected email talking the model into overwriting a shell profile or
+	// dropping a key must not get a write into a dot-path.
+	for _, savePath := range []string{"~/.ssh/", "~/.zshrc", filepath.Join(home, ".config", "x.json")} {
+		if got, err := resolveSavePath(savePath, "report.pdf"); err == nil {
+			t.Errorf("resolveSavePath(%q) allowed %q; expected refusal", savePath, got)
+		}
+	}
+}
+
+func TestResolveSavePath_AllowsHiddenPathsUnderTempDir(t *testing.T) {
+	// t.TempDir() sits under the system temp dir, which is exempt.
+	dir := filepath.Join(t.TempDir(), ".cache")
+	if _, err := resolveSavePath(dir+string(os.PathSeparator), "report.pdf"); err != nil {
+		t.Errorf("temp-dir hidden path should be allowed: %v", err)
 	}
 }
 
@@ -138,11 +183,41 @@ func TestSafeFilename(t *testing.T) {
 		"":                      "attachment",
 		"..":                    "attachment",
 		"/":                     "attachment",
+		// A sender must not be able to land a dotfile or smuggle control
+		// characters into the name or the attachment listing.
+		".zshrc":            "zshrc",
+		".ssh":              "ssh",
+		"...":               "attachment",
+		"re\x00port.pdf":    "report.pdf",
+		"line\r\nbreak.txt": "linebreak.txt",
 	}
 	for in, want := range cases {
 		if got := safeFilename(in); got != want {
 			t.Errorf("safeFilename(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestOpenExclusiveNeverOverwrites(t *testing.T) {
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "invoice.pdf")
+	if err := os.WriteFile(dest, []byte("original"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	f, got, err := openExclusive(dest)
+	if err != nil {
+		t.Fatalf("openExclusive: %v", err)
+	}
+	f.Close()
+
+	want := filepath.Join(dir, "invoice-1.pdf")
+	if got != want {
+		t.Errorf("second download went to %q, want %q", got, want)
+	}
+	kept, err := os.ReadFile(dest)
+	if err != nil || string(kept) != "original" {
+		t.Errorf("the existing file was modified: %q, %v", kept, err)
 	}
 }
 

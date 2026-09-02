@@ -130,7 +130,7 @@ func (s *GmailService) Tools() []mcp.ToolDefinition {
 				Properties: map[string]mcp.PropertySchema{
 					"messageId":    {Type: "string", Description: "Email message ID (from list-inbox or search-emails)"},
 					"attachmentId": {Type: "string", Description: "Attachment ID listed by get-email"},
-					"savePath":     {Type: "string", Description: "Destination file, or a directory to save under the original filename. Defaults to the system temp directory."},
+					"savePath":     {Type: "string", Description: "Destination file, or a directory (trailing slash) to save under the original filename. ~ is expanded. Defaults to the system temp directory. An existing file is never overwritten; a suffix is added instead. Hidden paths such as ~/.ssh are refused."},
 				},
 				Required: []string{"messageId", "attachmentId"},
 			},
@@ -336,12 +336,23 @@ func (s *GmailService) handleDownloadAttachment(ctx context.Context, params json
 		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to download attachment", Data: err.Error()}
 	}
 
-	dest := resolveSavePath(args.SavePath, att.Filename)
+	dest, err := resolveSavePath(args.SavePath, att.Filename)
+	if err != nil {
+		return nil, &mcp.RPCError{Code: -32602, Message: "Refusing that destination", Data: err.Error()}
+	}
 	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
 		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to create destination directory", Data: err.Error()}
 	}
-	if err := os.WriteFile(dest, att.Data, 0600); err != nil {
+	file, dest, err := openExclusive(dest)
+	if err != nil {
+		return nil, &mcp.RPCError{Code: -32603, Message: fmt.Sprintf("Failed to create %s", dest), Data: err.Error()}
+	}
+	if _, err := file.Write(att.Data); err != nil {
+		file.Close()
 		return nil, &mcp.RPCError{Code: -32603, Message: fmt.Sprintf("Failed to write %s", dest), Data: err.Error()}
+	}
+	if err := file.Close(); err != nil {
+		return nil, &mcp.RPCError{Code: -32603, Message: fmt.Sprintf("Failed to close %s", dest), Data: err.Error()}
 	}
 
 	result := fmt.Sprintf("💾 Saved %s (%s, %s)\n📁 %s",
@@ -367,34 +378,6 @@ func formatAttachments(atts []gmail.AttachmentInfo) string {
 	}
 	b.WriteString("\nUse download-attachment with the message ID and an attachment id to save one.")
 	return b.String()
-}
-
-// resolveSavePath decides where an attachment lands. An empty savePath means
-// the system temp directory; a savePath that is (or looks like) a directory
-// gets the attachment's own filename appended; anything else is used verbatim.
-func resolveSavePath(savePath, filename string) string {
-	if savePath == "" {
-		return filepath.Join(os.TempDir(), safeFilename(filename))
-	}
-	if strings.HasSuffix(savePath, string(os.PathSeparator)) {
-		return filepath.Join(savePath, safeFilename(filename))
-	}
-	if info, err := os.Stat(savePath); err == nil && info.IsDir() {
-		return filepath.Join(savePath, safeFilename(filename))
-	}
-	return savePath
-}
-
-// safeFilename reduces a sender-controlled filename to a single path element so
-// an attachment can never be written outside the chosen directory.
-func safeFilename(name string) string {
-	name = strings.ReplaceAll(name, "\\", "/")
-	name = filepath.Base(strings.TrimSpace(name))
-	name = strings.ReplaceAll(name, "\x00", "")
-	if name == "" || name == "." || name == ".." || name == string(os.PathSeparator) {
-		return "attachment"
-	}
-	return name
 }
 
 // attachmentInput is the JSON shape accepted by the tool schema.
