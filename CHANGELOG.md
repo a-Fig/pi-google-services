@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- **Receiving attachments**: `get-email` now lists the attachments on a message — filename, MIME type, size, inline flag and the attachment ID needed to fetch it.
+- **New tool `download-attachment`**: saves an attachment from a received email to disk by message ID + attachment ID. `savePath` accepts a directory (saves under the original filename), a full file path, or is omitted for the system temp directory.
+- Handles both storage models Gmail uses: large attachments fetched via `users.messages.attachments.get`, and small ones whose bytes ride inline in the MIME part (addressed by part ID).
+- Sender-supplied filenames are reduced to a single path element before being joined to a directory, so an attachment cannot be written outside the chosen destination.
+- Base64 decoding now tolerates unpadded base64url payloads, which also makes body extraction more robust.
+- Attachment sizes are rendered with the existing `fmtSize` helper shared with the Drive tools, which also covers GB.
+- 13 new unit tests (attachment extraction, part lookup, base64 decoding, save-path resolution, filename sanitization, display formatting).
+- **Replies actually thread** — `reply-to-email` now sends `In-Reply-To` and `References` derived from the thread, and reuses the thread's subject. Previously it set only `ThreadId`, which Gmail's own UI honours but every other mail client ignores, so recipients saw a disconnected new email. `to` and `subject` are now optional.
+
+
 ## v0.1.20-afig.1
 
 - **Calendar event colors** — `create-event` and `update-event` accept `colorId`.

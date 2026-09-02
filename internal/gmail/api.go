@@ -34,9 +34,20 @@ type EmailSummary struct {
 // EmailDetail is a full email with body content.
 type EmailDetail struct {
 	EmailSummary
-	To   string `json:"to"`
-	Body string `json:"body"`
-	HTML bool   `json:"html"`
+	To          string           `json:"to"`
+	Body        string           `json:"body"`
+	HTML        bool             `json:"html"`
+	Attachments []AttachmentInfo `json:"attachments,omitempty"`
+}
+
+// AttachmentInfo describes a file attached to a received message. Data is not
+// included — fetch it with GetAttachment using AttachmentID.
+type AttachmentInfo struct {
+	AttachmentID string `json:"attachment_id"`
+	Filename     string `json:"filename"`
+	MimeType     string `json:"mime_type"`
+	Size         int64  `json:"size"`
+	Inline       bool   `json:"inline,omitempty"`
 }
 
 // New creates a Gmail Service from an OAuth2 token source.
@@ -130,8 +141,45 @@ func (s *Service) GetEmail(ctx context.Context, id string) (*EmailDetail, error)
 	body, html := extractBody(msg.Payload, 0)
 	detail.Body = body
 	detail.HTML = html
+	detail.Attachments = extractAttachments(msg.Payload, 0)
 
 	return detail, nil
+}
+
+// GetAttachment downloads a single attachment from a received message. The
+// attachmentID comes from EmailDetail.Attachments (GetEmail).
+func (s *Service) GetAttachment(ctx context.Context, messageID, attachmentID string) (*Attachment, error) {
+	msg, err := s.svc.Messages.Get("me", messageID).Format("full").Do()
+	if err != nil {
+		return nil, fmt.Errorf("get message: %w", err)
+	}
+
+	part := findAttachmentPart(msg.Payload, attachmentID, 0)
+	if part == nil {
+		return nil, fmt.Errorf("attachment %s not found in message %s", attachmentID, messageID)
+	}
+
+	// Small attachments arrive inline in the part body; larger ones must be
+	// fetched separately by attachment ID.
+	raw := part.Body.Data
+	if part.Body.AttachmentId != "" {
+		body, err := s.svc.Messages.Attachments.Get("me", messageID, part.Body.AttachmentId).Do()
+		if err != nil {
+			return nil, fmt.Errorf("download attachment: %w", err)
+		}
+		raw = body.Data
+	}
+
+	data, err := decodeBase64URL(raw)
+	if err != nil {
+		return nil, fmt.Errorf("decode attachment data: %w", err)
+	}
+
+	return &Attachment{
+		Filename: part.Filename,
+		MimeType: part.MimeType,
+		Data:     data,
+	}, nil
 }
 
 // Attachment represents a file to attach to an email.
@@ -165,11 +213,11 @@ func extractBody(part *gmail.MessagePart, depth int) (body string, html bool) {
 
 	// Check this part's body
 	if part.MimeType == "text/plain" && part.Body != nil && part.Body.Data != "" {
-		data, _ := base64.URLEncoding.DecodeString(part.Body.Data)
+		data, _ := decodeBase64URL(part.Body.Data)
 		return string(data), false
 	}
 	if part.MimeType == "text/html" && part.Body != nil && part.Body.Data != "" {
-		data, _ := base64.URLEncoding.DecodeString(part.Body.Data)
+		data, _ := decodeBase64URL(part.Body.Data)
 		return string(data), true
 	}
 
@@ -181,6 +229,78 @@ func extractBody(part *gmail.MessagePart, depth int) (body string, html bool) {
 		}
 	}
 	return "", false
+}
+
+// extractAttachments walks a message payload collecting every part that carries
+// a filename. Both regular attachments and inline images (cid: references) are
+// returned; Inline distinguishes them.
+func extractAttachments(part *gmail.MessagePart, depth int) []AttachmentInfo {
+	if part == nil || depth > 10 {
+		return nil
+	}
+
+	var found []AttachmentInfo
+	if part.Filename != "" && part.Body != nil {
+		id := part.Body.AttachmentId
+		if id == "" {
+			// Inline body data — address the part by its ID instead.
+			id = part.PartId
+		}
+		if id != "" {
+			found = append(found, AttachmentInfo{
+				AttachmentID: id,
+				Filename:     part.Filename,
+				MimeType:     part.MimeType,
+				Size:         part.Body.Size,
+				Inline:       isInline(part),
+			})
+		}
+	}
+
+	for _, child := range part.Parts {
+		found = append(found, extractAttachments(child, depth+1)...)
+	}
+	return found
+}
+
+// findAttachmentPart locates the part an attachment ID refers to. The ID is
+// either a Gmail attachment ID or, for inline data, a MIME part ID.
+func findAttachmentPart(part *gmail.MessagePart, attachmentID string, depth int) *gmail.MessagePart {
+	if part == nil || depth > 10 {
+		return nil
+	}
+
+	if part.Filename != "" && part.Body != nil {
+		if part.Body.AttachmentId == attachmentID || (part.Body.AttachmentId == "" && part.PartId == attachmentID) {
+			return part
+		}
+	}
+
+	for _, child := range part.Parts {
+		if hit := findAttachmentPart(child, attachmentID, depth+1); hit != nil {
+			return hit
+		}
+	}
+	return nil
+}
+
+// isInline reports whether a part is displayed within the message body
+// (an embedded image) rather than offered as a separate download.
+func isInline(part *gmail.MessagePart) bool {
+	for _, h := range part.Headers {
+		if strings.EqualFold(h.Name, "Content-Disposition") {
+			return strings.HasPrefix(strings.TrimSpace(strings.ToLower(h.Value)), "inline")
+		}
+	}
+	return false
+}
+
+// decodeBase64URL decodes Gmail's base64url payloads, which may be unpadded.
+func decodeBase64URL(s string) ([]byte, error) {
+	if data, err := base64.URLEncoding.DecodeString(s); err == nil {
+		return data, nil
+	}
+	return base64.RawURLEncoding.DecodeString(s)
 }
 
 func createMessage(to, subject, body string, attachments []Attachment) *gmail.Message {
