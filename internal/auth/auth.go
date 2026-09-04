@@ -342,6 +342,17 @@ func (a *Authenticator) TokenSource(ctx context.Context, token *oauth2.Token) oa
 	}
 }
 
+// CachedTokenSource reuses a valid token loaded from disk and persists only
+// genuine refreshes. Short-lived polling helpers should use this instead of
+// forcing a refresh every time they start.
+func (a *Authenticator) CachedTokenSource(ctx context.Context, token *oauth2.Token) oauth2.TokenSource {
+	return &persistingTokenSource{
+		source:          a.OAuthConfig.TokenSource(ctx, token),
+		save:            saveOAuthToken,
+		lastAccessToken: token.AccessToken,
+	}
+}
+
 type persistingTokenSource struct {
 	source          oauth2.TokenSource
 	save            func(*oauth2.Token) error

@@ -22,13 +22,17 @@ type Service struct {
 
 // EmailSummary is a lightweight email representation.
 type EmailSummary struct {
-	ID       string   `json:"id"`
-	ThreadID string   `json:"thread_id"`
-	Subject  string   `json:"subject"`
-	From     string   `json:"from"`
-	Date     string   `json:"date"`
-	Snippet  string   `json:"snippet"`
-	LabelIDs []string `json:"label_ids,omitempty"`
+	ID           string   `json:"id"`
+	ThreadID     string   `json:"thread_id"`
+	Subject      string   `json:"subject"`
+	From         string   `json:"from"`
+	To           string   `json:"to,omitempty"`
+	Date         string   `json:"date"`
+	Snippet      string   `json:"snippet"`
+	ReturnPath   string   `json:"return_path,omitempty"`
+	XForwardedTo string   `json:"x_forwarded_to,omitempty"`
+	Origin       string   `json:"origin,omitempty"`
+	LabelIDs     []string `json:"label_ids,omitempty"`
 }
 
 // EmailDetail is a full email with body content.
@@ -81,7 +85,7 @@ func (s *Service) ListInbox(ctx context.Context, maxResults int64, query string)
 	for _, m := range res.Messages {
 		msg, err := s.svc.Messages.Get("me", m.Id).
 			Format("metadata").
-			MetadataHeaders("Subject", "From", "Date").
+			MetadataHeaders("Subject", "From", "To", "Date", "Return-Path", "X-Forwarded-To").
 			Do()
 		if err != nil {
 			continue // skip unreadable messages
@@ -99,8 +103,14 @@ func (s *Service) ListInbox(ctx context.Context, maxResults int64, query string)
 				summary.Subject = h.Value
 			case "From":
 				summary.From = h.Value
+			case "To":
+				summary.To = h.Value
 			case "Date":
 				summary.Date = h.Value
+			case "Return-Path":
+				summary.ReturnPath = h.Value
+			case "X-Forwarded-To":
+				summary.XForwardedTo = h.Value
 			}
 		}
 		summaries = append(summaries, summary)

@@ -49,8 +49,14 @@ type Tokens struct {
 	Expiry       string `json:"expiry,omitempty"`
 }
 
-// Dir returns the config directory path. Override DirFn in tests.
+// Dir returns the config directory path. Honors PI_GOOGLE_SERVICES_CONFIG_DIR
+// when set (e.g. so a host application can sandbox this binary's state under
+// its own per-user data directory instead of ~/.config/pi-google-services).
+// Override the var directly in tests.
 var Dir = func() (string, error) {
+	if dir := os.Getenv("PI_GOOGLE_SERVICES_CONFIG_DIR"); dir != "" {
+		return dir, nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("home dir: %w", err)
