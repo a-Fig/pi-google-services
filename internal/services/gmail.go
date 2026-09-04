@@ -211,8 +211,15 @@ func (s *GmailService) handleGetEmail(ctx context.Context, params json.RawMessag
 		body = body[:5000] + "\n\n[...truncated at 5000 chars]"
 	}
 
-	result := fmt.Sprintf("📧 %s\nFrom: %s\nTo: %s\nDate: %s\n\n%s",
-		detail.Subject, detail.From, detail.To, detail.Date, body)
+	result := fmt.Sprintf("📧 %s\nFrom: %s\nTo: %s\nDate: %s",
+		detail.Subject, detail.From, detail.To, detail.Date)
+	// Surfaced whenever the message carried a parseable DMARC verdict, so a caller reading a
+	// message's full body also sees whether Gmail actually authenticated its sender -- the
+	// same information email-watch reports as the "dmarc" field (CONNECTOR.md section 5).
+	if detail.Dmarc != "" {
+		result += fmt.Sprintf("\nDMARC: %s", detail.Dmarc)
+	}
+	result += fmt.Sprintf("\n\n%s", body)
 	result += formatAttachments(detail.Attachments)
 
 	return contentResponse(result), nil
