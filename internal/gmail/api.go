@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"mime"
+	"regexp"
 	"strings"
 	"time"
 
@@ -22,17 +23,57 @@ type Service struct {
 
 // EmailSummary is a lightweight email representation.
 type EmailSummary struct {
-	ID           string   `json:"id"`
-	ThreadID     string   `json:"thread_id"`
-	Subject      string   `json:"subject"`
-	From         string   `json:"from"`
-	To           string   `json:"to,omitempty"`
-	Date         string   `json:"date"`
-	Snippet      string   `json:"snippet"`
-	ReturnPath   string   `json:"return_path,omitempty"`
-	XForwardedTo string   `json:"x_forwarded_to,omitempty"`
-	Origin       string   `json:"origin,omitempty"`
-	LabelIDs     []string `json:"label_ids,omitempty"`
+	ID           string `json:"id"`
+	ThreadID     string `json:"thread_id"`
+	Subject      string `json:"subject"`
+	From         string `json:"from"`
+	To           string `json:"to,omitempty"`
+	Date         string `json:"date"`
+	Snippet      string `json:"snippet"`
+	ReturnPath   string `json:"return_path,omitempty"`
+	XForwardedTo string `json:"x_forwarded_to,omitempty"`
+	Origin       string `json:"origin,omitempty"`
+	// AuthenticationResults concatenates every Authentication-Results header on
+	// the message with "; " (Gmail can add more than one, e.g. one per relay
+	// hop). Absent (and omitted from JSON) when the message carries none.
+	AuthenticationResults string `json:"authentication_results,omitempty"`
+	// Dmarc is parsed out of AuthenticationResults ("pass", "fail", "none", or
+	// "" when no dmarc= result is present). Unlike AuthenticationResults this
+	// is never omitted: its mere presence in the JSON output (even as "") is
+	// the signal a caller uses to tell "this connector build evaluates DMARC"
+	// from "this connector predates DMARC support entirely" (the latter omits
+	// the key outright, since older builds have no such struct field to
+	// marshal). See CONNECTOR.md section 5.
+	Dmarc    string   `json:"dmarc"`
+	LabelIDs []string `json:"label_ids,omitempty"`
+}
+
+// dmarcResultPattern extracts the result token from a `dmarc=<token>` clause
+// inside an Authentication-Results header, e.g. "dmarc=pass (p=REJECT ...)".
+var dmarcResultPattern = regexp.MustCompile(`(?i)dmarc=([a-zA-Z]+)`)
+
+// parseDmarc pulls the DMARC verdict out of a (possibly multi-header,
+// "; "-joined) Authentication-Results value. Only "pass", "fail" and "none"
+// are recognized and returned verbatim in lowercase; anything else Gmail
+// might stamp (quarantine, reject, temperror, permerror) or the header being
+// absent/unparseable all collapse to "" rather than being guessed at, since a
+// caller gating trust decisions on this value should not have to know every
+// DMARC result token that exists to be safe.
+func parseDmarc(authenticationResults string) string {
+	m := dmarcResultPattern.FindStringSubmatch(authenticationResults)
+	if m == nil {
+		return ""
+	}
+	switch strings.ToLower(m[1]) {
+	case "pass":
+		return "pass"
+	case "fail":
+		return "fail"
+	case "none":
+		return "none"
+	default:
+		return ""
+	}
 }
 
 // EmailDetail is a full email with body content.
@@ -85,7 +126,7 @@ func (s *Service) ListInbox(ctx context.Context, maxResults int64, query string)
 	for _, m := range res.Messages {
 		msg, err := s.svc.Messages.Get("me", m.Id).
 			Format("metadata").
-			MetadataHeaders("Subject", "From", "To", "Date", "Return-Path", "X-Forwarded-To").
+			MetadataHeaders("Subject", "From", "To", "Date", "Return-Path", "X-Forwarded-To", "Authentication-Results").
 			Do()
 		if err != nil {
 			continue // skip unreadable messages
@@ -111,8 +152,15 @@ func (s *Service) ListInbox(ctx context.Context, maxResults int64, query string)
 				summary.ReturnPath = h.Value
 			case "X-Forwarded-To":
 				summary.XForwardedTo = h.Value
+			case "Authentication-Results":
+				if summary.AuthenticationResults != "" {
+					summary.AuthenticationResults += "; " + h.Value
+				} else {
+					summary.AuthenticationResults = h.Value
+				}
 			}
 		}
+		summary.Dmarc = parseDmarc(summary.AuthenticationResults)
 		summaries = append(summaries, summary)
 	}
 	return summaries, nil
@@ -144,8 +192,15 @@ func (s *Service) GetEmail(ctx context.Context, id string) (*EmailDetail, error)
 			detail.Date = h.Value
 		case "To":
 			detail.To = h.Value
+		case "Authentication-Results":
+			if detail.AuthenticationResults != "" {
+				detail.AuthenticationResults += "; " + h.Value
+			} else {
+				detail.AuthenticationResults = h.Value
+			}
 		}
 	}
+	detail.Dmarc = parseDmarc(detail.AuthenticationResults)
 
 	// Extract body from the payload (prefer plain text)
 	body, html := extractBody(msg.Payload, 0)
