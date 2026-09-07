@@ -12,6 +12,7 @@ import (
 
 	"github.com/sombi/pi-google-services/internal/auth"
 	"github.com/sombi/pi-google-services/internal/config"
+	"github.com/sombi/pi-google-services/internal/dnsresolve"
 	"github.com/sombi/pi-google-services/internal/gmail"
 )
 
@@ -91,6 +92,12 @@ func service(ctx context.Context) (*gmail.Service, error) {
 }
 
 func main() {
+	// Same CGO_ENABLED=0-on-Android DNS fix as pi-google-services (main.go); see
+	// internal/dnsresolve's package doc. email-watch is the second binary the 2026-09-07
+	// incident's evidence named -- it is built with the identical flags and would fail the
+	// same way the moment it needed to reach googleapis.com.
+	dnsresolve.Install()
+
 	path := ".pi/email-wake-rules.json"
 	if len(os.Args) > 1 {
 		path = os.Args[1]

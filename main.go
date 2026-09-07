@@ -19,6 +19,7 @@ import (
 	"github.com/sombi/pi-google-services/internal/calendar"
 	"github.com/sombi/pi-google-services/internal/config"
 	"github.com/sombi/pi-google-services/internal/contacts"
+	"github.com/sombi/pi-google-services/internal/dnsresolve"
 	"github.com/sombi/pi-google-services/internal/drive"
 	"github.com/sombi/pi-google-services/internal/gmail"
 	"github.com/sombi/pi-google-services/internal/mcp"
@@ -31,6 +32,14 @@ const version = "0.1.20-afig.1"
 func main() {
 	log.SetFlags(0)
 	log.SetPrefix("pi-google: ")
+
+	// This binary is CGO_ENABLED=0, so Go's pure-Go DNS resolver is the only one available --
+	// and on Android that resolver's usual source of nameservers, /etc/resolv.conf, does not
+	// exist, so it falls back to 127.0.0.1:53/[::1]:53 where nothing listens (incident
+	// 2026-09-07: every "login" call failed at the token exchange with exactly that dial
+	// error). Install must run before anything below does a DNS lookup -- see
+	// internal/dnsresolve's package doc for the full story and the alternative rejected.
+	dnsresolve.Install()
 
 	if len(os.Args) < 2 {
 		printUsage()
