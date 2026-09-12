@@ -115,7 +115,7 @@ func TestFormatEventsIncludesIDsCalendarAndColor(t *testing.T) {
 }
 
 func TestCalendarRPCErrorSurfacesGoogleDetail(t *testing.T) {
-	rpcErr := calendarRPCError("create event", errors.New("requiredAccessLevel"))
+	rpcErr := rpcError("create event", errors.New("requiredAccessLevel"))
 	if !strings.Contains(rpcErr.Message, "requiredAccessLevel") {
 		t.Fatalf("error message hid API detail: %q", rpcErr.Message)
 	}
