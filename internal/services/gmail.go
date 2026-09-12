@@ -75,7 +75,7 @@ func (s *GmailService) Tools() []mcp.ToolDefinition {
 		},
 		{
 			Name:        "send-email",
-			Description: "Send an email with optional file attachments",
+			Description: "Send an email with optional file attachments. Starts a NEW conversation; to answer an existing email use reply-to-email instead.",
 			InputSchema: mcp.InputSchema{
 				Type: "object",
 				Properties: map[string]mcp.PropertySchema{
@@ -103,7 +103,7 @@ func (s *GmailService) Tools() []mcp.ToolDefinition {
 			InputSchema: mcp.InputSchema{
 				Type: "object",
 				Properties: map[string]mcp.PropertySchema{
-					"threadId": {Type: "string", Description: "Thread ID to reply to (thread_id from list-inbox, get-email, or search-emails)"},
+					"threadId": {Type: "string", Description: "Thread ID to reply to: the Thread: id shown by list-inbox, search-emails, or get-email. A message id also works."},
 					"to":       {Type: "string", Description: "Optional. Recipient email. Defaults to the thread's Reply-To, else its From."},
 					"subject":  {Type: "string", Description: "Optional and normally omitted. Ignored when the thread has a subject: a reply whose subject differs reads as a separate email in most mail clients."},
 					"body":     {Type: "string", Description: "Reply body text"},
@@ -170,7 +170,7 @@ func (s *GmailService) handleListInbox(ctx context.Context, params json.RawMessa
 
 	msgs, err := s.api.ListInbox(ctx, args.MaxResults, args.Query)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to list inbox", Data: err.Error()}
+		return nil, rpcError("list inbox", err)
 	}
 
 	var b strings.Builder
@@ -178,13 +178,56 @@ func (s *GmailService) handleListInbox(ctx context.Context, params json.RawMessa
 		b.WriteString("📭 Inbox vacío.")
 	} else {
 		for i, m := range msgs {
-			date := gmail.HumanDate(m.Date)
-			b.WriteString(fmt.Sprintf("%d. %s\n   📧 %s\n   👤 %s  🕐 %s\n   💬 %s\n",
-				i+1, m.Subject, m.ID, m.From, date, m.Snippet))
+			b.WriteString(formatInboxEntry(i, m))
 		}
 	}
 
 	return contentResponse(b.String()), nil
+}
+
+// formatReplyResult renders the reply-to-email success message, including the
+// "Resolved thread ... from message ..." line when the caller's threadId
+// argument turned out to be a message ID (see internal/gmail.ReplyToEmail and
+// pi-vi issue #102) and the not-threaded warning when Gmail accepted the
+// message without attaching it to the requested conversation.
+func formatReplyResult(reply *gmail.ReplyResult, attachmentCount int) string {
+	result := fmt.Sprintf("✅ Reply sent to %s\nSubject: %s\nID: %s\nThread: %s",
+		reply.To, reply.Subject, reply.Message.Id, reply.Message.ThreadId)
+	if reply.ResolvedFromMessage != "" {
+		result += fmt.Sprintf("\nResolved thread %s from message %s", reply.Message.ThreadId, reply.ResolvedFromMessage)
+	}
+	if !reply.Threaded {
+		// Gmail accepted the message but did not attach it to the conversation, so
+		// the recipient would see a new email. Report that instead of plain success.
+		result += "\nWarning: Gmail did not add this to the requested thread; it was delivered as a new conversation."
+	}
+	if attachmentCount > 0 {
+		result += fmt.Sprintf("\n📎 Attachments: %d", attachmentCount)
+	}
+	return result
+}
+
+// formatThreadLine renders the "Thread: <id>" line get-email appends after
+// the DMARC block, or "" when the message carried no thread ID.
+func formatThreadLine(threadID string) string {
+	if threadID == "" {
+		return ""
+	}
+	return fmt.Sprintf("\nThread: %s", threadID)
+}
+
+// formatInboxEntry renders one list-inbox result line, including the thread
+// ID line a caller needs to pass to reply-to-email (see pi-vi issue #102 --
+// without it, replying required guessing a thread ID from a message ID,
+// which 404s for anything but the first message in a thread).
+func formatInboxEntry(i int, m *gmail.EmailSummary) string {
+	date := gmail.HumanDate(m.Date)
+	entry := fmt.Sprintf("%d. %s\n   📧 %s\n   👤 %s  🕐 %s\n   💬 %s\n",
+		i+1, m.Subject, m.ID, m.From, date, m.Snippet)
+	if m.ThreadID != "" {
+		entry += fmt.Sprintf("   Thread: %s\n", m.ThreadID)
+	}
+	return entry
 }
 
 func (s *GmailService) handleGetEmail(ctx context.Context, params json.RawMessage) (interface{}, *mcp.RPCError) {
@@ -200,7 +243,7 @@ func (s *GmailService) handleGetEmail(ctx context.Context, params json.RawMessag
 
 	detail, err := s.api.GetEmail(ctx, args.ID)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to get email", Data: err.Error()}
+		return nil, rpcError("get email", err)
 	}
 
 	body := detail.Body
@@ -219,6 +262,7 @@ func (s *GmailService) handleGetEmail(ctx context.Context, params json.RawMessag
 	if detail.Dmarc != "" {
 		result += fmt.Sprintf("\nDMARC: %s", detail.Dmarc)
 	}
+	result += formatThreadLine(detail.ThreadID)
 	result += fmt.Sprintf("\n\n%s", body)
 	result += formatAttachments(detail.Attachments)
 
@@ -239,7 +283,7 @@ func (s *GmailService) handleSearchEmails(ctx context.Context, params json.RawMe
 
 	msgs, err := s.api.SearchEmails(ctx, args.Query, args.MaxResults)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to search", Data: err.Error()}
+		return nil, rpcError("search", err)
 	}
 
 	var b strings.Builder
@@ -247,13 +291,23 @@ func (s *GmailService) handleSearchEmails(ctx context.Context, params json.RawMe
 		b.WriteString("No results.")
 	} else {
 		for i, m := range msgs {
-			date := gmail.HumanDate(m.Date)
-			b.WriteString(fmt.Sprintf("%d. [%s] %s\n   From: %s  %s\n   %s\n",
-				i+1, m.ID, m.Subject, m.From, date, m.Snippet))
+			b.WriteString(formatSearchEntry(i, m))
 		}
 	}
 
 	return contentResponse(b.String()), nil
+}
+
+// formatSearchEntry renders one search-emails result line, including the
+// thread ID line reply-to-email needs (see formatInboxEntry).
+func formatSearchEntry(i int, m *gmail.EmailSummary) string {
+	date := gmail.HumanDate(m.Date)
+	entry := fmt.Sprintf("%d. [%s] %s\n   From: %s  %s\n   %s\n",
+		i+1, m.ID, m.Subject, m.From, date, m.Snippet)
+	if m.ThreadID != "" {
+		entry += fmt.Sprintf("   Thread: %s\n", m.ThreadID)
+	}
+	return entry
 }
 
 func (s *GmailService) handleSendEmail(ctx context.Context, params json.RawMessage) (interface{}, *mcp.RPCError) {
@@ -277,7 +331,7 @@ func (s *GmailService) handleSendEmail(ctx context.Context, params json.RawMessa
 
 	sent, err := s.api.SendEmail(ctx, args.To, args.Subject, args.Body, attachments)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to send", Data: err.Error()}
+		return nil, rpcError("send", err)
 	}
 
 	result := fmt.Sprintf("✅ Email sent to %s\nID: %s", args.To, sent.Id)
@@ -309,19 +363,10 @@ func (s *GmailService) handleReplyEmail(ctx context.Context, params json.RawMess
 
 	reply, err := s.api.ReplyToEmail(ctx, args.ThreadID, args.To, args.Subject, args.Body, attachments)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to reply", Data: err.Error()}
+		return nil, rpcError("reply", err)
 	}
 
-	result := fmt.Sprintf("✅ Reply sent to %s\nSubject: %s\nID: %s\nThread: %s",
-		reply.To, reply.Subject, reply.Message.Id, reply.Message.ThreadId)
-	if !reply.Threaded {
-		// Gmail accepted the message but did not attach it to the conversation, so
-		// the recipient would see a new email. Report that instead of plain success.
-		result += "\nWarning: Gmail did not add this to the requested thread; it was delivered as a new conversation."
-	}
-	if len(attachments) > 0 {
-		result += fmt.Sprintf("\n📎 Attachments: %d", len(attachments))
-	}
+	result := formatReplyResult(reply, len(attachments))
 	return contentResponse(result), nil
 }
 
@@ -340,7 +385,7 @@ func (s *GmailService) handleDownloadAttachment(ctx context.Context, params json
 
 	att, err := s.api.GetAttachment(ctx, args.MessageID, args.AttachmentID)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to download attachment", Data: err.Error()}
+		return nil, rpcError("download attachment", err)
 	}
 
 	dest, err := resolveSavePath(args.SavePath, att.Filename)
@@ -348,18 +393,18 @@ func (s *GmailService) handleDownloadAttachment(ctx context.Context, params json
 		return nil, &mcp.RPCError{Code: -32602, Message: "Refusing that destination", Data: err.Error()}
 	}
 	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to create destination directory", Data: err.Error()}
+		return nil, rpcError("create destination directory", err)
 	}
 	file, dest, err := openExclusive(dest)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: fmt.Sprintf("Failed to create %s", dest), Data: err.Error()}
+		return nil, rpcError(fmt.Sprintf("create %s", dest), err)
 	}
 	if _, err := file.Write(att.Data); err != nil {
 		file.Close()
-		return nil, &mcp.RPCError{Code: -32603, Message: fmt.Sprintf("Failed to write %s", dest), Data: err.Error()}
+		return nil, rpcError(fmt.Sprintf("write %s", dest), err)
 	}
 	if err := file.Close(); err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: fmt.Sprintf("Failed to close %s", dest), Data: err.Error()}
+		return nil, rpcError(fmt.Sprintf("close %s", dest), err)
 	}
 
 	result := fmt.Sprintf("💾 Saved %s (%s, %s)\n📁 %s",
