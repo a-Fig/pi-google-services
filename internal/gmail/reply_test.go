@@ -180,6 +180,9 @@ func fakeGmailUsersService(t *testing.T, handler http.HandlerFunc) *gmail.UsersS
 	return svc.Users
 }
 
+// These run inside the test server's handler goroutine, where t.Fatal is not
+// allowed (FailNow must be called from the test goroutine), so they report
+// with t.Errorf and let the request finish.
 func writeGoogleAPIError(t *testing.T, w http.ResponseWriter, code int, message string) {
 	t.Helper()
 	w.Header().Set("Content-Type", "application/json")
@@ -187,7 +190,7 @@ func writeGoogleAPIError(t *testing.T, w http.ResponseWriter, code int, message 
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"error": map[string]interface{}{"code": code, "message": message},
 	}); err != nil {
-		t.Fatalf("encode error body: %v", err)
+		t.Errorf("encode error body: %v", err)
 	}
 }
 
@@ -195,7 +198,7 @@ func writeJSON(t *testing.T, w http.ResponseWriter, v interface{}) {
 	t.Helper()
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(v); err != nil {
-		t.Fatalf("encode response: %v", err)
+		t.Errorf("encode response: %v", err)
 	}
 }
 
@@ -282,7 +285,9 @@ func TestThreadReplyTarget_NeitherThreadNorMessageExists(t *testing.T) {
 func TestThreadReplyTarget_NonNotFoundErrorSkipsFallback(t *testing.T) {
 	svc := fakeGmailUsersService(t, func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/messages/") {
-			t.Fatal("a non-404 thread error must not trigger the message-ID fallback")
+			t.Error("a non-404 thread error must not trigger the message-ID fallback")
+			http.Error(w, "unexpected fallback", http.StatusInternalServerError)
+			return
 		}
 		writeGoogleAPIError(t, w, http.StatusBadRequest, "Invalid Id")
 	})

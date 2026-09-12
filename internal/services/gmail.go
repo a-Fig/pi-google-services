@@ -451,11 +451,7 @@ func (s *GmailService) resolveAttachments(ctx context.Context, inputs []attachme
 		case input.LocalPath != "":
 			data, err := os.ReadFile(input.LocalPath)
 			if err != nil {
-				return nil, &mcp.RPCError{
-					Code:    -32603,
-					Message: fmt.Sprintf("Failed to read attachment %d: %s", i+1, input.LocalPath),
-					Data:    err.Error(),
-				}
+				return nil, rpcError(fmt.Sprintf("read attachment %d (%s)", i+1, input.LocalPath), err)
 			}
 			mimeType := mime.TypeByExtension(filepath.Ext(input.LocalPath))
 			if mimeType == "" {
@@ -476,11 +472,7 @@ func (s *GmailService) resolveAttachments(ctx context.Context, inputs []attachme
 			}
 			content, err := s.driveAPI.DownloadContent(ctx, input.DriveFileID)
 			if err != nil {
-				return nil, &mcp.RPCError{
-					Code:    -32603,
-					Message: fmt.Sprintf("Failed to download Drive file %s", input.DriveFileID),
-					Data:    err.Error(),
-				}
+				return nil, rpcError(fmt.Sprintf("download Drive file %s", input.DriveFileID), err)
 			}
 			attachments = append(attachments, gmail.Attachment{
 				Filename: content.Name,
