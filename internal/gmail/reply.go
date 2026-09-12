@@ -2,11 +2,14 @@ package gmail
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"net/textproto"
 	"strings"
 
 	"google.golang.org/api/gmail/v1"
+	"google.golang.org/api/googleapi"
 )
 
 // Threading a reply takes more than a thread ID.
@@ -43,6 +46,11 @@ type ReplyResult struct {
 	To       string
 	Subject  string
 	Threaded bool
+	// ResolvedFromMessage is set when the caller passed a message ID rather
+	// than a thread ID: it holds that message ID, so the caller can be told
+	// which thread its input actually resolved to. Empty when the caller's ID
+	// was already a thread ID.
+	ResolvedFromMessage string
 }
 
 // ReplyToEmail answers the most recent message in a thread.
@@ -52,7 +60,7 @@ type ReplyResult struct {
 // thread, because a caller cannot know the thread's subject without another
 // round trip and a mismatched one breaks the conversation.
 func (s *Service) ReplyToEmail(ctx context.Context, threadID, to, subject, body string, attachments []Attachment) (*ReplyResult, error) {
-	target, err := s.threadReplyTarget(threadID)
+	target, resolvedThreadID, resolvedFromMessage, err := s.threadReplyTarget(threadID)
 	if err != nil {
 		return nil, fmt.Errorf("reply: %w", err)
 	}
@@ -61,7 +69,7 @@ func (s *Service) ReplyToEmail(ctx context.Context, threadID, to, subject, body 
 		to = target.ReplyTo
 	}
 	if to == "" {
-		return nil, fmt.Errorf("reply: thread %s has no Reply-To or From to answer, pass an explicit recipient", threadID)
+		return nil, fmt.Errorf("reply: thread %s has no Reply-To or From to answer, pass an explicit recipient", resolvedThreadID)
 	}
 	if threadSubject := replySubject(target.Subject); threadSubject != "" {
 		subject = threadSubject
@@ -69,7 +77,7 @@ func (s *Service) ReplyToEmail(ctx context.Context, threadID, to, subject, body 
 
 	msg := buildMessage(to, subject, body, attachments,
 		replyHeaders(target.MessageID, referencesChain(target.References, target.MessageID)))
-	msg.ThreadId = threadID
+	msg.ThreadId = resolvedThreadID
 
 	sent, err := s.svc.Messages.Send("me", msg).Do()
 	if err != nil {
@@ -77,28 +85,75 @@ func (s *Service) ReplyToEmail(ctx context.Context, threadID, to, subject, body 
 	}
 
 	return &ReplyResult{
-		Message:  sent,
-		To:       to,
-		Subject:  subject,
-		Threaded: sent.ThreadId == threadID,
+		Message:             sent,
+		To:                  to,
+		Subject:             subject,
+		Threaded:            sent.ThreadId == resolvedThreadID,
+		ResolvedFromMessage: resolvedFromMessage,
 	}, nil
 }
 
 // threadReplyTarget loads a thread and returns its most recent message as the
-// one to answer. Metadata format is enough and avoids pulling bodies and
-// attachments back over the wire just to read five headers.
-func (s *Service) threadReplyTarget(threadID string) (*replyTarget, error) {
-	thread, err := s.svc.Threads.Get("me", threadID).
+// one to answer, along with the thread ID that was actually resolved (which
+// may differ from id) and, when id turned out to be a message ID rather than
+// a thread ID, that message ID.
+//
+// Gmail thread IDs equal their first message's ID, so a caller that passes the
+// ID of a later message in the conversation gets a 404 from Threads.Get. Since
+// this is exactly the mistake an agent working only from message IDs would
+// make (see pi-vi issue #102), a 404 here is retried as a message lookup
+// before giving up: Messages.Get on id, then Threads.Get on that message's
+// ThreadId. Any other error from the first Threads.Get call (e.g. a 400 for a
+// malformed ID) is not eligible for the fallback and surfaces unchanged.
+//
+// Metadata format is enough for both calls and avoids pulling bodies and
+// attachments back over the wire just to read a handful of headers.
+func (s *Service) threadReplyTarget(id string) (target *replyTarget, threadID string, resolvedFromMessage string, err error) {
+	thread, err := s.svc.Threads.Get("me", id).
 		Format("metadata").
 		MetadataHeaders("Message-ID", "References", "Subject", "From", "Reply-To").
 		Do()
 	if err != nil {
-		return nil, fmt.Errorf("load thread %s: %w", threadID, err)
+		if !isNotFound(err) {
+			return nil, "", "", fmt.Errorf("load thread %s: %w", id, err)
+		}
+
+		msg, msgErr := s.svc.Messages.Get("me", id).Format("minimal").Do()
+		if msgErr != nil {
+			if isNotFound(msgErr) {
+				return nil, "", "", fmt.Errorf("neither a thread nor a message with id %s exists", id)
+			}
+			return nil, "", "", fmt.Errorf("load message %s: %w", id, msgErr)
+		}
+
+		thread, err = s.svc.Threads.Get("me", msg.ThreadId).
+			Format("metadata").
+			MetadataHeaders("Message-ID", "References", "Subject", "From", "Reply-To").
+			Do()
+		if err != nil {
+			return nil, "", "", fmt.Errorf("load thread %s: %w", msg.ThreadId, err)
+		}
+		resolvedFromMessage = id
 	}
 	if len(thread.Messages) == 0 {
-		return nil, fmt.Errorf("thread %s has no messages", threadID)
+		return nil, "", "", fmt.Errorf("thread %s has no messages", thread.Id)
 	}
-	return extractReplyTarget(thread.Messages[len(thread.Messages)-1]), nil
+	return extractReplyTarget(thread.Messages[len(thread.Messages)-1]), thread.Id, resolvedFromMessage, nil
+}
+
+// isNotFound reports whether err is a googleapi 404, including when wrapped.
+// A nil err, a non-googleapi error, or any other status (a 400 for a
+// malformed ID, say) all report false so that only "no such thread" triggers
+// the message-ID fallback in threadReplyTarget.
+func isNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	var gErr *googleapi.Error
+	if errors.As(err, &gErr) {
+		return gErr.Code == http.StatusNotFound
+	}
+	return false
 }
 
 // extractReplyTarget pulls the threading headers out of a message. Header names

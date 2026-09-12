@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/sombi/pi-google-services/internal/gmail"
+	gmailapi "google.golang.org/api/gmail/v1"
 )
 
 func TestResolveAttachments_Empty(t *testing.T) {
@@ -237,6 +238,107 @@ func TestFormatAttachments_ListsIDsAndSizes(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestFormatInboxEntry_IncludesThreadID(t *testing.T) {
+	entry := formatInboxEntry(0, &gmail.EmailSummary{
+		ID:       "msg-1",
+		ThreadID: "thread-1",
+		Subject:  "Lunch",
+		From:     "a@b.com",
+		Date:     "Mon, 2 Jan 2006 15:04:05 -0700",
+		Snippet:  "hey",
+	})
+	if !strings.Contains(entry, "   Thread: thread-1\n") {
+		t.Errorf("entry missing Thread line:\n%s", entry)
+	}
+	// The thread line must come after the entry's existing lines, not before.
+	if strings.Index(entry, "Thread: thread-1") < strings.Index(entry, "msg-1") {
+		t.Errorf("Thread line appeared before the message line:\n%s", entry)
+	}
+}
+
+func TestFormatInboxEntry_OmitsThreadLineWhenEmpty(t *testing.T) {
+	entry := formatInboxEntry(0, &gmail.EmailSummary{ID: "msg-1", Subject: "Lunch", From: "a@b.com"})
+	if strings.Contains(entry, "Thread:") {
+		t.Errorf("expected no Thread line for an empty ThreadID:\n%s", entry)
+	}
+}
+
+func TestFormatSearchEntry_IncludesThreadID(t *testing.T) {
+	entry := formatSearchEntry(0, &gmail.EmailSummary{
+		ID:       "msg-1",
+		ThreadID: "thread-1",
+		Subject:  "Lunch",
+		From:     "a@b.com",
+	})
+	if !strings.Contains(entry, "   Thread: thread-1\n") {
+		t.Errorf("entry missing Thread line:\n%s", entry)
+	}
+}
+
+func TestFormatSearchEntry_OmitsThreadLineWhenEmpty(t *testing.T) {
+	entry := formatSearchEntry(0, &gmail.EmailSummary{ID: "msg-1", Subject: "Lunch", From: "a@b.com"})
+	if strings.Contains(entry, "Thread:") {
+		t.Errorf("expected no Thread line for an empty ThreadID:\n%s", entry)
+	}
+}
+
+func TestFormatReplyResult_Plain(t *testing.T) {
+	got := formatReplyResult(&gmail.ReplyResult{
+		To: "a@b.com", Subject: "Re: Lunch", Threaded: true,
+		Message: &gmailapi.Message{Id: "msg-2", ThreadId: "thread-1"},
+	}, 0)
+	for _, want := range []string{"a@b.com", "Re: Lunch", "msg-2", "Thread: thread-1"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in %q", want, got)
+		}
+	}
+	if strings.Contains(got, "Resolved thread") {
+		t.Errorf("did not expect a Resolved line when ResolvedFromMessage is empty:\n%s", got)
+	}
+	if strings.Contains(got, "Warning") {
+		t.Errorf("did not expect a not-threaded warning:\n%s", got)
+	}
+}
+
+func TestFormatReplyResult_ResolvedFromMessage(t *testing.T) {
+	got := formatReplyResult(&gmail.ReplyResult{
+		To: "a@b.com", Subject: "Re: Lunch", Threaded: true, ResolvedFromMessage: "msg-mid",
+		Message: &gmailapi.Message{Id: "msg-2", ThreadId: "thread-1"},
+	}, 0)
+	if !strings.Contains(got, "Resolved thread thread-1 from message msg-mid") {
+		t.Errorf("missing resolution line:\n%s", got)
+	}
+}
+
+func TestFormatReplyResult_NotThreadedWarning(t *testing.T) {
+	got := formatReplyResult(&gmail.ReplyResult{
+		To: "a@b.com", Subject: "Re: Lunch", Threaded: false,
+		Message: &gmailapi.Message{Id: "msg-2", ThreadId: "thread-9"},
+	}, 0)
+	if !strings.Contains(got, "Warning: Gmail did not add this to the requested thread") {
+		t.Errorf("missing not-threaded warning:\n%s", got)
+	}
+}
+
+func TestFormatReplyResult_AttachmentCount(t *testing.T) {
+	got := formatReplyResult(&gmail.ReplyResult{
+		To: "a@b.com", Subject: "Re: Lunch", Threaded: true,
+		Message: &gmailapi.Message{Id: "msg-2", ThreadId: "thread-1"},
+	}, 2)
+	if !strings.Contains(got, "📎 Attachments: 2") {
+		t.Errorf("missing attachment count:\n%s", got)
+	}
+}
+
+func TestFormatThreadLine(t *testing.T) {
+	if got := formatThreadLine("thread-1"); got != "\nThread: thread-1" {
+		t.Errorf("formatThreadLine(%q) = %q, want %q", "thread-1", got, "\nThread: thread-1")
+	}
+	if got := formatThreadLine(""); got != "" {
+		t.Errorf("formatThreadLine(\"\") = %q, want empty string", got)
 	}
 }
 

@@ -179,7 +179,7 @@ func (s *CalendarService) handleListEvents(ctx context.Context, params json.RawM
 
 	events, err := s.api.ListEvents(ctx, args.CalendarID, timeMin, timeMax, args.MaxResults)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to list events", Data: err.Error()}
+		return nil, rpcError("list events", err)
 	}
 
 	return contentResponse(formatEvents(events)), nil
@@ -223,7 +223,7 @@ func (s *CalendarService) handleCreateEvent(ctx context.Context, params json.Raw
 
 	created, err := s.api.CreateEvent(ctx, args.CalendarID, event, args.WithMeet)
 	if err != nil {
-		return nil, calendarRPCError("create event", err)
+		return nil, rpcError("create event", err)
 	}
 
 	meetInfo := ""
@@ -290,7 +290,7 @@ func (s *CalendarService) handleUpdateEvent(ctx context.Context, params json.Raw
 
 	updated, err := s.api.UpdateEvent(ctx, args.CalendarID, args.EventID, event)
 	if err != nil {
-		return nil, calendarRPCError("update event", err)
+		return nil, rpcError("update event", err)
 	}
 	return contentResponse(fmt.Sprintf("✅ Event updated: %s\nLink: %s", updated.Summary, updated.HtmlLink)), nil
 }
@@ -307,7 +307,7 @@ func (s *CalendarService) handleDeleteEvent(ctx context.Context, params json.Raw
 		return nil, &mcp.RPCError{Code: -32602, Message: "eventId required"}
 	}
 	if err := s.api.DeleteEvent(ctx, args.CalendarID, args.EventID); err != nil {
-		return nil, calendarRPCError("delete event", err)
+		return nil, rpcError("delete event", err)
 	}
 	return contentResponse(fmt.Sprintf("✅ Event deleted (ID: %s)", args.EventID)), nil
 }
@@ -326,7 +326,7 @@ func (s *CalendarService) handleSearchEvents(ctx context.Context, params json.Ra
 	}
 	events, err := s.api.SearchEvents(ctx, args.CalendarID, args.Query, args.MaxResults)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to search", Data: err.Error()}
+		return nil, rpcError("search events", err)
 	}
 	return contentResponse(formatEvents(events)), nil
 }
@@ -334,7 +334,7 @@ func (s *CalendarService) handleSearchEvents(ctx context.Context, params json.Ra
 func (s *CalendarService) handleListCalendars(ctx context.Context, _ json.RawMessage) (interface{}, *mcp.RPCError) {
 	calendars, err := s.api.ListCalendars(ctx)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to list calendars", Data: err.Error()}
+		return nil, rpcError("list calendars", err)
 	}
 	var b strings.Builder
 	for _, cal := range calendars {
@@ -387,7 +387,7 @@ func (s *CalendarService) handleFreeBusy(ctx context.Context, params json.RawMes
 
 	calendars, err := s.api.GetFreeBusy(ctx, ids, timeMin, timeMax)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to get free/busy", Data: err.Error()}
+		return nil, rpcError("get free/busy", err)
 	}
 
 	var b strings.Builder
@@ -405,14 +405,6 @@ func (s *CalendarService) handleFreeBusy(ctx context.Context, params json.RawMes
 }
 
 // helpers
-
-func calendarRPCError(operation string, err error) *mcp.RPCError {
-	// Put the Google API detail in Message as well as Data. Some MCP clients hide
-	// error.Data, which previously reduced useful errors (such as requiredAccessLevel)
-	// to the unhelpful text "Failed to create event".
-	message := fmt.Sprintf("Failed to %s: %v", operation, err)
-	return &mcp.RPCError{Code: -32603, Message: message, Data: err.Error()}
-}
 
 func contentResponse(text string) map[string]interface{} {
 	return map[string]interface{}{

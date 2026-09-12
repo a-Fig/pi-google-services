@@ -136,7 +136,7 @@ func (s *DriveService) handleListFiles(ctx context.Context, params json.RawMessa
 
 	files, err := s.api.ListFiles(ctx, args.FolderID, args.Query, args.Limit)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to list files", Data: err.Error()}
+		return nil, rpcError("list files", err)
 	}
 
 	var b strings.Builder
@@ -170,7 +170,7 @@ func (s *DriveService) handleSearchDrive(ctx context.Context, params json.RawMes
 
 	files, err := s.api.SearchDrive(ctx, args.Query, args.Limit)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to search", Data: err.Error()}
+		return nil, rpcError("search", err)
 	}
 
 	var b strings.Builder
@@ -207,7 +207,7 @@ func (s *DriveService) handleUploadFile(ctx context.Context, params json.RawMess
 
 	created, err := s.api.UploadFile(ctx, args.LocalPath, args.ParentFolderID, "")
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to upload", Data: err.Error()}
+		return nil, rpcError("upload", err)
 	}
 
 	return contentResponse(fmt.Sprintf("✅ Uploaded: %s\n   ID: %s\n   📦 %s\n   🔗 %s",
@@ -232,12 +232,12 @@ func (s *DriveService) handleDownloadFile(ctx context.Context, params json.RawMe
 	// Get file name first
 	info, err := s.api.GetFile(ctx, args.FileID)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to get file info", Data: err.Error()}
+		return nil, rpcError("get file info", err)
 	}
 
 	destPath := args.DestDir + "/" + info.Name
 	if err := s.api.DownloadFile(ctx, args.FileID, destPath); err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to download", Data: err.Error()}
+		return nil, rpcError("download", err)
 	}
 
 	return contentResponse(fmt.Sprintf("✅ Downloaded: %s → %s\n   📦 %s", info.Name, destPath, fmtSize(info.Size))), nil
@@ -257,7 +257,7 @@ func (s *DriveService) handleCreateFolder(ctx context.Context, params json.RawMe
 
 	folder, err := s.api.CreateFolder(ctx, args.Name, args.ParentFolderID)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to create folder", Data: err.Error()}
+		return nil, rpcError("create folder", err)
 	}
 
 	return contentResponse(fmt.Sprintf("✅ Folder created: %s\n   ID: %s", folder.Name, folder.ID)), nil
@@ -275,7 +275,7 @@ func (s *DriveService) handleDeleteFile(ctx context.Context, params json.RawMess
 	}
 
 	if err := s.api.DeleteFile(ctx, args.FileID); err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to delete", Data: err.Error()}
+		return nil, rpcError("delete", err)
 	}
 
 	return contentResponse(fmt.Sprintf("✅ File deleted (ID: %s)", args.FileID)), nil
