@@ -20,6 +20,8 @@ type Service struct {
 type EventSummary struct {
 	ID          string `json:"id"`
 	CalendarID  string `json:"calendar_id"`
+	// CalendarName is set only when the events were read across calendars (all.go).
+	CalendarName string `json:"calendar_name,omitempty"`
 	ColorID     string `json:"color_id,omitempty"`
 	Summary     string `json:"summary"`
 	Description string `json:"description,omitempty"`
@@ -29,6 +31,9 @@ type EventSummary struct {
 	HTMLLink    string `json:"html_link,omitempty"`
 	Attendees   int    `json:"attendees,omitempty"`
 	Creator     string `json:"creator,omitempty"`
+
+	// startAt orders events from different calendars; Start is already formatted for display.
+	startAt time.Time
 }
 
 // New creates a Service from an OAuth2 token source.
@@ -40,13 +45,16 @@ func New(ctx context.Context, ts oauth2.TokenSource) (*Service, error) {
 	return &Service{svc: svc}, nil
 }
 
-// ListEvents returns events in a time range.
+// ListEvents returns events in a time range: on one calendar, or with no calendarID on every
+// calendar the account can see (all.go says why that is not just "primary").
 func (s *Service) ListEvents(ctx context.Context, calendarID string, timeMin, timeMax time.Time, maxResults int64) ([]*EventSummary, error) {
-	if calendarID == "" {
-		calendarID = "primary"
-	}
 	if maxResults <= 0 {
 		maxResults = 50
+	}
+	if calendarID == "" {
+		return s.everywhere(ctx, maxResults, func(id string) ([]*EventSummary, error) {
+			return s.ListEvents(ctx, id, timeMin, timeMax, maxResults)
+		})
 	}
 
 	events, err := s.svc.Events.List(calendarID).
@@ -70,6 +78,7 @@ func (s *Service) ListEvents(ctx context.Context, calendarID string, timeMin, ti
 			Start:      fmtDateTime(e.Start),
 			End:        fmtDateTime(e.End),
 			HTMLLink:   e.HtmlLink,
+			startAt:    startOf(e.Start),
 		}
 		if e.Description != "" {
 			se.Description = truncate(e.Description, 200)
@@ -132,13 +141,16 @@ func (s *Service) DeleteEvent(ctx context.Context, calendarID, eventID string) e
 	return s.svc.Events.Delete(calendarID, eventID).Do()
 }
 
-// SearchEvents queries events by text on one calendar.
+// SearchEvents queries events by text: on one calendar, or with no calendarID on every calendar
+// the account can see.
 func (s *Service) SearchEvents(ctx context.Context, calendarID, query string, maxResults int64) ([]*EventSummary, error) {
-	if calendarID == "" {
-		calendarID = "primary"
-	}
 	if maxResults <= 0 {
 		maxResults = 50
+	}
+	if calendarID == "" {
+		return s.everywhere(ctx, maxResults, func(id string) ([]*EventSummary, error) {
+			return s.SearchEvents(ctx, id, query, maxResults)
+		})
 	}
 	events, err := s.svc.Events.List(calendarID).
 		Q(query).
@@ -159,6 +171,7 @@ func (s *Service) SearchEvents(ctx context.Context, calendarID, query string, ma
 			Start:      fmtDateTime(e.Start),
 			End:        fmtDateTime(e.End),
 			HTMLLink:   e.HtmlLink,
+			startAt:    startOf(e.Start),
 		})
 	}
 	return result, nil
@@ -173,10 +186,17 @@ func (s *Service) ListCalendars(ctx context.Context) ([]*gcal.CalendarListEntry,
 	return calList.Items, nil
 }
 
-// GetFreeBusy checks availability.
+// GetFreeBusy checks availability: on the calendars named, or with none named on every calendar
+// the account can see.
 func (s *Service) GetFreeBusy(ctx context.Context, calendarIDs []string, timeMin, timeMax time.Time) (map[string]gcal.FreeBusyCalendar, error) {
 	if len(calendarIDs) == 0 {
-		calendarIDs = []string{"primary"}
+		calendars, err := s.readable(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range calendars {
+			calendarIDs = append(calendarIDs, c.Id)
+		}
 	}
 	req := &gcal.FreeBusyRequest{
 		TimeMin: timeMin.Format(time.RFC3339),

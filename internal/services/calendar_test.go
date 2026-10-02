@@ -114,6 +114,32 @@ func TestFormatEventsIncludesIDsCalendarAndColor(t *testing.T) {
 	}
 }
 
+func TestFormatEventsNamesTheCalendarWhenReadAcrossAll(t *testing.T) {
+	got := formatEvents([]*calendar.EventSummary{{
+		ID:           "event-123",
+		CalendarID:   "abc123@group.calendar.google.com",
+		CalendarName: "School / Study",
+		Summary:      "Calc 1 Exam",
+	}})
+	if want := "Calendar: School / Study (abc123@group.calendar.google.com)"; !strings.Contains(got, want) {
+		t.Errorf("formatEvents() missing %q in %q", want, got)
+	}
+}
+
+func TestCalendarReadsDoNotClaimToDefaultToPrimary(t *testing.T) {
+	// "default: primary" on a read is how an assistant's account ended up reading only its own,
+	// empty calendar. The reads cover every calendar now; only the writes still say primary.
+	for _, tool := range (&CalendarService{}).Tools() {
+		for name, prop := range tool.InputSchema.Properties {
+			saysPrimary := strings.Contains(prop.Description, "default: primary")
+			read := tool.Name == "list-events" || tool.Name == "search-events" || tool.Name == "get-freebusy"
+			if read && saysPrimary {
+				t.Errorf("%s.%s still says it defaults to primary: %q", tool.Name, name, prop.Description)
+			}
+		}
+	}
+}
+
 func TestCalendarRPCErrorSurfacesGoogleDetail(t *testing.T) {
 	rpcErr := rpcError("create event", errors.New("requiredAccessLevel"))
 	if !strings.Contains(rpcErr.Message, "requiredAccessLevel") {

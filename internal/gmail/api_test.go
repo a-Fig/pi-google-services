@@ -141,13 +141,13 @@ func TestExtractAttachments(t *testing.T) {
 		t.Fatalf("expected 2 attachments, got %d", len(atts))
 	}
 
-	if atts[0].Filename != "report.pdf" || atts[0].AttachmentID != "att-1" || atts[0].Size != 2048 {
+	if atts[0].Filename != "report.pdf" || atts[0].AttachmentID != "1" || atts[0].Size != 2048 {
 		t.Errorf("unexpected first attachment: %+v", atts[0])
 	}
 	if atts[0].Inline {
 		t.Error("report.pdf should not be inline")
 	}
-	if atts[1].Filename != "logo.png" || !atts[1].Inline {
+	if atts[1].Filename != "logo.png" || atts[1].AttachmentID != "2.0" || !atts[1].Inline {
 		t.Errorf("expected inline logo.png, got %+v", atts[1])
 	}
 }
@@ -203,8 +203,53 @@ func TestFindAttachmentPart(t *testing.T) {
 	if got := findAttachmentPart(payload, "att-deep", 0); got != nested {
 		t.Errorf("expected to find nested part, got %+v", got)
 	}
+	if got := findAttachmentPart(payload, "1.1", 0); got != nested {
+		t.Errorf("expected to find nested part by its part ID, got %+v", got)
+	}
 	if got := findAttachmentPart(payload, "missing", 0); got != nil {
 		t.Errorf("expected nil for unknown ID, got %+v", got)
+	}
+	if got := findAttachmentPart(payload, "", 0); got != nil {
+		t.Errorf("expected nil for an empty ID, got %+v", got)
+	}
+}
+
+func TestAttachmentIDSurvivesAnotherFetch(t *testing.T) {
+	// Gmail hands out a new attachment ID for the same part on every messages.get. The ID listed
+	// from one fetch has to find the part in the next one.
+	fetch := func(attachmentID string) *gmail.MessagePart {
+		return &gmail.MessagePart{
+			MimeType: "multipart/mixed",
+			Parts: []*gmail.MessagePart{
+				{PartId: "0", MimeType: "text/plain", Body: &gmail.MessagePartBody{Size: 4}},
+				{PartId: "1", MimeType: "application/pdf", Filename: "syllabus.pdf", Body: &gmail.MessagePartBody{AttachmentId: attachmentID, Size: 2048}},
+			},
+		}
+	}
+
+	listed := extractAttachments(fetch("ANGjdJ-first-fetch"), 0)
+	if len(listed) != 1 {
+		t.Fatalf("expected 1 attachment, got %d", len(listed))
+	}
+	part := findAttachmentPart(fetch("ANGjdJ-second-fetch"), listed[0].AttachmentID, 0)
+	if part == nil || part.Filename != "syllabus.pdf" {
+		t.Fatalf("ID %q from the first fetch did not find the part in the second: %+v", listed[0].AttachmentID, part)
+	}
+	if part.Body.AttachmentId != "ANGjdJ-second-fetch" {
+		t.Errorf("found part carries %q, want the second fetch's own ID to download with", part.Body.AttachmentId)
+	}
+}
+
+func TestExtractAttachments_RootPartKeepsAttachmentID(t *testing.T) {
+	// A message that is nothing but a file has one part and no part ID.
+	payload := &gmail.MessagePart{
+		MimeType: "application/pdf",
+		Filename: "only.pdf",
+		Body:     &gmail.MessagePartBody{AttachmentId: "att-root", Size: 10},
+	}
+	atts := extractAttachments(payload, 0)
+	if len(atts) != 1 || atts[0].AttachmentID != "att-root" {
+		t.Fatalf("extractAttachments() = %+v, want the attachment ID as the handle", atts)
 	}
 }
 
