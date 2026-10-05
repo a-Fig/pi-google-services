@@ -36,11 +36,11 @@ func (s *CalendarService) Tools() []mcp.ToolDefinition {
 	return []mcp.ToolDefinition{
 		{
 			Name:        "list-events",
-			Description: "List calendar events in a date range",
+			Description: "List calendar events in a date range. With no calendarId it reads every calendar this account can see, its own and those shared with it, and names the calendar of each event.",
 			InputSchema: mcp.InputSchema{
 				Type: "object",
 				Properties: map[string]mcp.PropertySchema{
-					"calendarId": {Type: "string", Description: "Calendar ID (default: primary)"},
+					"calendarId": {Type: "string", Description: "One calendar's ID, to read only that calendar (default: every calendar this account can see)"},
 					"timeMin":    {Type: "string", Description: "Start time (ISO 8601, e.g. 2026-06-10T00:00:00Z)"},
 					"timeMax":    {Type: "string", Description: "End time (ISO 8601)"},
 					"maxResults": {Type: "number", Description: "Maximum events to return (default: 50)", Default: 50},
@@ -53,7 +53,7 @@ func (s *CalendarService) Tools() []mcp.ToolDefinition {
 			InputSchema: mcp.InputSchema{
 				Type: "object",
 				Properties: map[string]mcp.PropertySchema{
-					"calendarId":  {Type: "string", Description: "Calendar ID (default: primary)"},
+					"calendarId":  {Type: "string", Description: "Calendar ID (default: primary, which is this account's own calendar; a calendar shared with it needs its ID, see list-calendars)"},
 					"summary":     {Type: "string", Description: "Event title"},
 					"description": {Type: "string", Description: "Event description"},
 					"startTime":   {Type: "string", Description: "Start time (ISO 8601)"},
@@ -72,7 +72,7 @@ func (s *CalendarService) Tools() []mcp.ToolDefinition {
 			InputSchema: mcp.InputSchema{
 				Type: "object",
 				Properties: map[string]mcp.PropertySchema{
-					"calendarId":  {Type: "string", Description: "Calendar ID (default: primary)"},
+					"calendarId":  {Type: "string", Description: "Calendar ID (default: primary, which is this account's own calendar; a calendar shared with it needs its ID, see list-calendars)"},
 					"eventId":     {Type: "string", Description: "Event ID to update"},
 					"summary":     {Type: "string", Description: "New title"},
 					"description": {Type: "string", Description: "New description"},
@@ -90,7 +90,7 @@ func (s *CalendarService) Tools() []mcp.ToolDefinition {
 			InputSchema: mcp.InputSchema{
 				Type: "object",
 				Properties: map[string]mcp.PropertySchema{
-					"calendarId": {Type: "string", Description: "Calendar ID (default: primary)"},
+					"calendarId": {Type: "string", Description: "Calendar ID (default: primary, which is this account's own calendar; a calendar shared with it needs its ID, see list-calendars)"},
 					"eventId":    {Type: "string", Description: "Event ID to delete"},
 				},
 				Required: []string{"eventId"},
@@ -102,7 +102,7 @@ func (s *CalendarService) Tools() []mcp.ToolDefinition {
 			InputSchema: mcp.InputSchema{
 				Type: "object",
 				Properties: map[string]mcp.PropertySchema{
-					"calendarId": {Type: "string", Description: "Calendar ID to search (default: primary)"},
+					"calendarId": {Type: "string", Description: "One calendar's ID, to search only that calendar (default: every calendar this account can see)"},
 					"query":      {Type: "string", Description: "Search query text"},
 					"maxResults": {Type: "number", Description: "Max results (default: 50)", Default: 50},
 				},
@@ -120,7 +120,7 @@ func (s *CalendarService) Tools() []mcp.ToolDefinition {
 			InputSchema: mcp.InputSchema{
 				Type: "object",
 				Properties: map[string]mcp.PropertySchema{
-					"calendarIds": {Type: "string", Description: "Comma-separated calendar IDs (default: primary)"},
+					"calendarIds": {Type: "string", Description: "Comma-separated calendar IDs (default: every calendar this account can see)"},
 					"timeMin":     {Type: "string", Description: "Start time (ISO 8601)"},
 					"timeMax":     {Type: "string", Description: "End time (ISO 8601)"},
 				},
@@ -420,7 +420,12 @@ func formatEvents(events []*calendar.EventSummary) string {
 	}
 	var b strings.Builder
 	for i, e := range events {
-		b.WriteString(fmt.Sprintf("%d. %s\n   ID: %s\n   Calendar: %s\n   📅 %s → %s", i+1, e.Summary, e.ID, e.CalendarID, e.Start, e.End))
+		// The name is there when the read covered every calendar: an ID alone does not say whose.
+		where := e.CalendarID
+		if e.CalendarName != "" {
+			where = fmt.Sprintf("%s (%s)", e.CalendarName, e.CalendarID)
+		}
+		b.WriteString(fmt.Sprintf("%d. %s\n   ID: %s\n   Calendar: %s\n   📅 %s → %s", i+1, e.Summary, e.ID, where, e.Start, e.End))
 		if e.ColorID != "" {
 			b.WriteString(fmt.Sprintf("\n   Color ID: %s", e.ColorID))
 		}

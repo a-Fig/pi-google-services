@@ -221,7 +221,7 @@ func (s *Service) GetAttachment(ctx context.Context, messageID, attachmentID str
 
 	part := findAttachmentPart(msg.Payload, attachmentID, 0)
 	if part == nil {
-		return nil, fmt.Errorf("attachment %s not found in message %s", attachmentID, messageID)
+		return nil, fmt.Errorf("attachment %s not found in message %s; read the message again for its attachment IDs", attachmentID, messageID)
 	}
 
 	// Small attachments arrive inline in the part body; larger ones must be
@@ -306,10 +306,13 @@ func extractAttachments(part *gmail.MessagePart, depth int) []AttachmentInfo {
 
 	var found []AttachmentInfo
 	if part.Filename != "" && part.Body != nil {
-		id := part.Body.AttachmentId
+		// The part ID is the handle. Gmail's attachment ID cannot be one: messages.get gives the
+		// same attachment a different ID on every call, so an ID listed here never matched the
+		// fetch GetAttachment makes later and every download ended in "not found". Only the root
+		// part of a single-part message has no part ID; it keeps the attachment ID.
+		id := part.PartId
 		if id == "" {
-			// Inline body data — address the part by its ID instead.
-			id = part.PartId
+			id = part.Body.AttachmentId
 		}
 		if id != "" {
 			found = append(found, AttachmentInfo{
@@ -328,15 +331,16 @@ func extractAttachments(part *gmail.MessagePart, depth int) []AttachmentInfo {
 	return found
 }
 
-// findAttachmentPart locates the part an attachment ID refers to. The ID is
-// either a Gmail attachment ID or, for inline data, a MIME part ID.
+// findAttachmentPart locates the part an attachment ID refers to. The ID is a
+// MIME part ID, which is what extractAttachments lists, or a Gmail attachment
+// ID where the part has no part ID.
 func findAttachmentPart(part *gmail.MessagePart, attachmentID string, depth int) *gmail.MessagePart {
-	if part == nil || depth > 10 {
+	if part == nil || depth > 10 || attachmentID == "" {
 		return nil
 	}
 
 	if part.Filename != "" && part.Body != nil {
-		if part.Body.AttachmentId == attachmentID || (part.Body.AttachmentId == "" && part.PartId == attachmentID) {
+		if part.PartId == attachmentID || part.Body.AttachmentId == attachmentID {
 			return part
 		}
 	}
