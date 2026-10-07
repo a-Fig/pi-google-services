@@ -5,15 +5,21 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"math/rand/v2"
 	"mime"
 	"mime/quotedprintable"
+	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/oauth2"
 	"google.golang.org/api/gmail/v1"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 )
 
@@ -118,53 +124,181 @@ func (s *Service) ListInbox(ctx context.Context, maxResults int64, query string)
 		call.Q(query)
 	}
 
-	res, err := call.Do()
+	res, err := call.Context(ctx).Do()
 	if err != nil {
 		return nil, fmt.Errorf("list messages: %w", err)
 	}
 
-	summaries := make([]*EmailSummary, 0, len(res.Messages))
-	for _, m := range res.Messages {
-		msg, err := s.svc.Messages.Get("me", m.Id).
-			Format("metadata").
-			MetadataHeaders("Subject", "From", "To", "Date", "Return-Path", "X-Forwarded-To", "Authentication-Results").
-			Do()
-		if err != nil {
-			continue // skip unreadable messages
+	// One Messages.Get per message, each its own round trip. Run one after another, a 30-message
+	// inbox cost 31 round trips from the phone before anything showed (pi-vi #324). They run
+	// listFetchConcurrency at a time instead, multiplexed on the client's one HTTP/2 connection,
+	// and land in list order.
+	//
+	// A message that cannot be read, for any reason but being gone, fails the whole list and stops
+	// the fetches still to come. A list quietly missing messages is worse than an error:
+	// email-watch's first poll of a rule takes what it gets as everything there is, and would
+	// later report a dropped message as new mail.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var failOnce sync.Once
+	var failed error
+	fail := func(err error) {
+		failOnce.Do(func() {
+			failed = err
+			cancel()
+		})
+	}
+	fetched := make([]*EmailSummary, len(res.Messages))
+	sem := make(chan struct{}, listFetchConcurrency)
+	var wg sync.WaitGroup
+	for i, m := range res.Messages {
+		sem <- struct{}{}
+		if ctx.Err() != nil {
+			break
 		}
-
-		summary := &EmailSummary{
-			ID:       msg.Id,
-			ThreadID: msg.ThreadId,
-			Snippet:  msg.Snippet,
-			LabelIDs: msg.LabelIds,
-		}
-		for _, h := range msg.Payload.Headers {
-			switch h.Name {
-			case "Subject":
-				summary.Subject = h.Value
-			case "From":
-				summary.From = h.Value
-			case "To":
-				summary.To = h.Value
-			case "Date":
-				summary.Date = h.Value
-			case "Return-Path":
-				summary.ReturnPath = h.Value
-			case "X-Forwarded-To":
-				summary.XForwardedTo = h.Value
-			case "Authentication-Results":
-				if summary.AuthenticationResults != "" {
-					summary.AuthenticationResults += "; " + h.Value
-				} else {
-					summary.AuthenticationResults = h.Value
-				}
+		wg.Add(1)
+		go func(i int, id string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			summary, err := s.summary(ctx, id)
+			if err != nil {
+				fail(err)
+				return
 			}
+			fetched[i] = summary
+		}(i, m.Id)
+	}
+	wg.Wait()
+	if failed != nil {
+		return nil, failed
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("list messages: %w", err)
+	}
+
+	summaries := make([]*EmailSummary, 0, len(fetched))
+	for _, summary := range fetched {
+		if summary != nil {
+			summaries = append(summaries, summary)
 		}
-		summary.Dmarc = parseDmarc(summary.AuthenticationResults)
-		summaries = append(summaries, summary)
 	}
 	return summaries, nil
+}
+
+const (
+	// listFetchConcurrency bounds ListInbox's parallel Messages.Get calls: a page of 30 takes six
+	// round trips rather than 30. A get costs 5 of the 250 quota units a user may spend per
+	// second, and email-watch polls from its own process beside this one, so at most twice this
+	// many are in flight for one account.
+	listFetchConcurrency = 5
+	// listFetchAttempts is how many times one message's get is tried before the list fails.
+	listFetchAttempts = 3
+	// maxRetryDelay caps the wait a Retry-After header can ask for.
+	maxRetryDelay = 10 * time.Second
+)
+
+// fetchRetryDelay is the wait before a get's second try, doubled for each try after; a variable
+// so tests need not sit through it.
+var fetchRetryDelay = 500 * time.Millisecond
+
+// summary fetches one message's metadata for ListInbox. A message Gmail no longer has, deleted
+// between the list and the get, comes back nil and is skipped, as before. Rate limits, Gmail's
+// server errors and requests that got no answer are tried again; anything else is an error.
+func (s *Service) summary(ctx context.Context, id string) (*EmailSummary, error) {
+	var msg *gmail.Message
+	for attempt := 1; ; attempt++ {
+		var err error
+		msg, err = s.svc.Messages.Get("me", id).
+			Format("metadata").
+			MetadataHeaders("Subject", "From", "To", "Date", "Return-Path", "X-Forwarded-To", "Authentication-Results").
+			Context(ctx).
+			Do()
+		if err == nil {
+			break
+		}
+		if isNotFound(err) {
+			return nil, nil
+		}
+		if attempt == listFetchAttempts || !retryableFetch(ctx, err) {
+			return nil, fmt.Errorf("get message %s: %w", id, err)
+		}
+		timer := time.NewTimer(retryDelay(err, attempt))
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, fmt.Errorf("get message %s: %w", id, ctx.Err())
+		case <-timer.C:
+		}
+	}
+
+	summary := &EmailSummary{
+		ID:       msg.Id,
+		ThreadID: msg.ThreadId,
+		Snippet:  msg.Snippet,
+		LabelIDs: msg.LabelIds,
+	}
+	for _, h := range msg.Payload.Headers {
+		switch h.Name {
+		case "Subject":
+			summary.Subject = h.Value
+		case "From":
+			summary.From = h.Value
+		case "To":
+			summary.To = h.Value
+		case "Date":
+			summary.Date = h.Value
+		case "Return-Path":
+			summary.ReturnPath = h.Value
+		case "X-Forwarded-To":
+			summary.XForwardedTo = h.Value
+		case "Authentication-Results":
+			if summary.AuthenticationResults != "" {
+				summary.AuthenticationResults += "; " + h.Value
+			} else {
+				summary.AuthenticationResults = h.Value
+			}
+		}
+	}
+	summary.Dmarc = parseDmarc(summary.AuthenticationResults)
+	return summary, nil
+}
+
+// retryableFetch says whether a failed get is worth another try: Gmail's rate limits (429, or
+// 403 with a rate-limit reason), its 5xx answers, and a request that got no answer at all. Never
+// once the caller has given up.
+func retryableFetch(ctx context.Context, err error) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	var gErr *googleapi.Error
+	if !errors.As(err, &gErr) {
+		return true
+	}
+	if gErr.Code == http.StatusTooManyRequests || gErr.Code >= 500 {
+		return true
+	}
+	if gErr.Code == http.StatusForbidden {
+		for _, item := range gErr.Errors {
+			if item.Reason == "rateLimitExceeded" || item.Reason == "userRateLimitExceeded" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// retryDelay is how long to wait before the next try: what Gmail asked for in Retry-After, if it
+// said, or a doubling delay with jitter, so that fetches turned away together do not all come
+// back together.
+func retryDelay(err error, attempt int) time.Duration {
+	var gErr *googleapi.Error
+	if errors.As(err, &gErr) {
+		if secs, convErr := strconv.Atoi(gErr.Header.Get("Retry-After")); convErr == nil && secs >= 0 {
+			return min(time.Duration(secs)*time.Second, maxRetryDelay)
+		}
+	}
+	d := fetchRetryDelay << (attempt - 1)
+	return d + rand.N(d)
 }
 
 // GetEmail retrieves the full content of a message by ID.
