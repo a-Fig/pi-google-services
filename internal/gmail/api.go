@@ -10,6 +10,7 @@ import (
 	"mime/quotedprintable"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -123,48 +124,79 @@ func (s *Service) ListInbox(ctx context.Context, maxResults int64, query string)
 		return nil, fmt.Errorf("list messages: %w", err)
 	}
 
-	summaries := make([]*EmailSummary, 0, len(res.Messages))
-	for _, m := range res.Messages {
-		msg, err := s.svc.Messages.Get("me", m.Id).
-			Format("metadata").
-			MetadataHeaders("Subject", "From", "To", "Date", "Return-Path", "X-Forwarded-To", "Authentication-Results").
-			Do()
-		if err != nil {
-			continue // skip unreadable messages
-		}
+	// One Messages.Get per message, each its own round trip. Run one after another, a 30-message
+	// inbox cost 31 round trips from the phone before anything showed (pi-vi #324). They run
+	// listFetchConcurrency at a time instead, multiplexed on the client's one HTTP/2 connection,
+	// and land in list order.
+	fetched := make([]*EmailSummary, len(res.Messages))
+	sem := make(chan struct{}, listFetchConcurrency)
+	var wg sync.WaitGroup
+	for i, m := range res.Messages {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(i int, id string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			fetched[i] = s.summary(id)
+		}(i, m.Id)
+	}
+	wg.Wait()
 
-		summary := &EmailSummary{
-			ID:       msg.Id,
-			ThreadID: msg.ThreadId,
-			Snippet:  msg.Snippet,
-			LabelIDs: msg.LabelIds,
+	summaries := make([]*EmailSummary, 0, len(fetched))
+	for _, summary := range fetched {
+		if summary != nil {
+			summaries = append(summaries, summary)
 		}
-		for _, h := range msg.Payload.Headers {
-			switch h.Name {
-			case "Subject":
-				summary.Subject = h.Value
-			case "From":
-				summary.From = h.Value
-			case "To":
-				summary.To = h.Value
-			case "Date":
-				summary.Date = h.Value
-			case "Return-Path":
-				summary.ReturnPath = h.Value
-			case "X-Forwarded-To":
-				summary.XForwardedTo = h.Value
-			case "Authentication-Results":
-				if summary.AuthenticationResults != "" {
-					summary.AuthenticationResults += "; " + h.Value
-				} else {
-					summary.AuthenticationResults = h.Value
-				}
-			}
-		}
-		summary.Dmarc = parseDmarc(summary.AuthenticationResults)
-		summaries = append(summaries, summary)
 	}
 	return summaries, nil
+}
+
+// listFetchConcurrency bounds ListInbox's parallel Messages.Get calls: enough that a page of 30
+// takes a few round trips rather than 30, and far below Gmail's per-user rate limit (a get costs
+// 5 of the 250 quota units a user may spend per second).
+const listFetchConcurrency = 10
+
+// summary fetches one message's metadata for ListInbox, or nil when it cannot be read: an
+// unreadable message is skipped rather than failing the whole list.
+func (s *Service) summary(id string) *EmailSummary {
+	msg, err := s.svc.Messages.Get("me", id).
+		Format("metadata").
+		MetadataHeaders("Subject", "From", "To", "Date", "Return-Path", "X-Forwarded-To", "Authentication-Results").
+		Do()
+	if err != nil {
+		return nil
+	}
+
+	summary := &EmailSummary{
+		ID:       msg.Id,
+		ThreadID: msg.ThreadId,
+		Snippet:  msg.Snippet,
+		LabelIDs: msg.LabelIds,
+	}
+	for _, h := range msg.Payload.Headers {
+		switch h.Name {
+		case "Subject":
+			summary.Subject = h.Value
+		case "From":
+			summary.From = h.Value
+		case "To":
+			summary.To = h.Value
+		case "Date":
+			summary.Date = h.Value
+		case "Return-Path":
+			summary.ReturnPath = h.Value
+		case "X-Forwarded-To":
+			summary.XForwardedTo = h.Value
+		case "Authentication-Results":
+			if summary.AuthenticationResults != "" {
+				summary.AuthenticationResults += "; " + h.Value
+			} else {
+				summary.AuthenticationResults = h.Value
+			}
+		}
+	}
+	summary.Dmarc = parseDmarc(summary.AuthenticationResults)
+	return summary
 }
 
 // GetEmail retrieves the full content of a message by ID.
