@@ -18,19 +18,19 @@ type Service struct {
 
 // EventSummary is a simplified calendar event for display.
 type EventSummary struct {
-	ID          string `json:"id"`
-	CalendarID  string `json:"calendar_id"`
+	ID         string `json:"id"`
+	CalendarID string `json:"calendar_id"`
 	// CalendarName is set only when the events were read across calendars (all.go).
 	CalendarName string `json:"calendar_name,omitempty"`
-	ColorID     string `json:"color_id,omitempty"`
-	Summary     string `json:"summary"`
-	Description string `json:"description,omitempty"`
-	Start       string `json:"start"`
-	End         string `json:"end"`
-	Location    string `json:"location,omitempty"`
-	HTMLLink    string `json:"html_link,omitempty"`
-	Attendees   int    `json:"attendees,omitempty"`
-	Creator     string `json:"creator,omitempty"`
+	ColorID      string `json:"color_id,omitempty"`
+	Summary      string `json:"summary"`
+	Description  string `json:"description,omitempty"`
+	Start        string `json:"start"`
+	End          string `json:"end"`
+	Location     string `json:"location,omitempty"`
+	HTMLLink     string `json:"html_link,omitempty"`
+	Attendees    int    `json:"attendees,omitempty"`
+	Creator      string `json:"creator,omitempty"`
 
 	// startAt orders events from different calendars; Start is already formatted for display.
 	startAt time.Time
@@ -179,11 +179,15 @@ func (s *Service) SearchEvents(ctx context.Context, calendarID, query string, ma
 
 // ListCalendars returns all calendars.
 func (s *Service) ListCalendars(ctx context.Context) ([]*gcal.CalendarListEntry, error) {
-	calList, err := s.svc.CalendarList.List().Do()
+	var calendars []*gcal.CalendarListEntry
+	err := s.svc.CalendarList.List().Pages(ctx, func(page *gcal.CalendarList) error {
+		calendars = append(calendars, page.Items...)
+		return nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("list calendars: %w", err)
 	}
-	return calList.Items, nil
+	return calendars, nil
 }
 
 // GetFreeBusy checks availability: on the calendars named, or with none named on every calendar
@@ -209,6 +213,12 @@ func (s *Service) GetFreeBusy(ctx context.Context, calendarIDs []string, timeMin
 	resp, err := s.svc.Freebusy.Query(req).Do()
 	if err != nil {
 		return nil, fmt.Errorf("freebusy: %w", err)
+	}
+	// A per-calendar API error is not an empty (free) schedule.
+	for id, cal := range resp.Calendars {
+		if len(cal.Errors) > 0 {
+			return nil, fmt.Errorf("freebusy calendar %q: %s", id, cal.Errors[0].Reason)
+		}
 	}
 	return resp.Calendars, nil
 }

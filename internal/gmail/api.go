@@ -222,7 +222,14 @@ func (s *Service) GetAttachment(ctx context.Context, messageID, attachmentID str
 
 	part := findAttachmentPart(msg.Payload, attachmentID, 0)
 	if part == nil {
-		return nil, fmt.Errorf("attachment %s not found in message %s; read the message again for its attachment IDs", attachmentID, messageID)
+		// Older tool results contain Gmail's opaque attachment ID, which may no
+		// longer appear in this fetch. Let Gmail resolve it directly. Its attachment
+		// endpoint returns only bytes, so do not guess another part's metadata.
+		part = &gmail.MessagePart{
+			Filename: "attachment.bin",
+			MimeType: "application/octet-stream",
+			Body:     &gmail.MessagePartBody{AttachmentId: attachmentID},
+		}
 	}
 
 	// Small attachments arrive inline in the part body; larger ones must be
@@ -231,7 +238,7 @@ func (s *Service) GetAttachment(ctx context.Context, messageID, attachmentID str
 	if part.Body.AttachmentId != "" {
 		body, err := s.svc.Messages.Attachments.Get("me", messageID, part.Body.AttachmentId).Do()
 		if err != nil {
-			return nil, fmt.Errorf("download attachment: %w", err)
+			return nil, fmt.Errorf("download attachment (read the message again if this ID has expired): %w", err)
 		}
 		raw = body.Data
 	}
@@ -297,6 +304,9 @@ func extractBody(part *gmail.MessagePart, depth int) (body string, html bool) {
 	return "", false
 }
 
+// Gmail's root MIME part can have an empty PartId. Give it a stable handle too.
+const rootAttachmentID = "part:root"
+
 // extractAttachments walks a message payload collecting every part that carries
 // a filename. Both regular attachments and inline images (cid: references) are
 // returned; Inline distinguishes them.
@@ -309,9 +319,11 @@ func extractAttachments(part *gmail.MessagePart, depth int) []AttachmentInfo {
 	if part.Filename != "" && part.Body != nil {
 		// The part ID is the handle. Gmail's attachment ID cannot be one: messages.get gives the
 		// same attachment a different ID on every call, so an ID listed here never matched the
-		// fetch GetAttachment makes later and every download ended in "not found". Only the root
-		// part of a single-part message has no part ID; it keeps the attachment ID.
+		// fetch GetAttachment makes later and every download ended in "not found".
 		id := part.PartId
+		if id == "" && depth == 0 {
+			id = rootAttachmentID
+		}
 		if id == "" {
 			id = part.Body.AttachmentId
 		}
@@ -341,7 +353,8 @@ func findAttachmentPart(part *gmail.MessagePart, attachmentID string, depth int)
 	}
 
 	if part.Filename != "" && part.Body != nil {
-		if part.PartId == attachmentID || part.Body.AttachmentId == attachmentID {
+		if part.PartId == attachmentID || part.Body.AttachmentId == attachmentID ||
+			(depth == 0 && part.PartId == "" && attachmentID == rootAttachmentID) {
 			return part
 		}
 	}
