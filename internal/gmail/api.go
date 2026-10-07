@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"mime"
+	"mime/quotedprintable"
 	"regexp"
 	"strings"
 	"time"
@@ -381,9 +382,17 @@ func createMessage(to, subject, body string, attachments []Attachment) *gmail.Me
 // In-Reply-To and References.
 func buildMessage(to, subject, body string, attachments []Attachment, extraHeaders string) *gmail.Message {
 	encSubject := mime.BEncoding.Encode("UTF-8", subject)
+	// Encode the text part, not just Gmail's outer base64url envelope. Soft MIME
+	// line breaks keep long paragraphs within transport limits without adding
+	// visible newlines, and carry UTF-8 safely through 7-bit mail transports.
+	var text bytes.Buffer
+	writer := quotedprintable.NewWriter(&text)
+	_, _ = writer.Write([]byte(body)) // bytes.Buffer writes cannot fail.
+	_ = writer.Close()                // Flush the final line before reading text.
+	encodedBody := text.String()
 
 	if len(attachments) == 0 {
-		msg := fmt.Sprintf("From: me\r\nTo: %s\r\nSubject: %s\r\n%sMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"UTF-8\"\r\n\r\n%s", to, encSubject, extraHeaders, body)
+		msg := fmt.Sprintf("From: me\r\nTo: %s\r\nSubject: %s\r\n%sMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"UTF-8\"\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n%s", to, encSubject, extraHeaders, encodedBody)
 		encoded := base64.URLEncoding.EncodeToString([]byte(msg))
 		return &gmail.Message{Raw: encoded}
 	}
@@ -393,7 +402,7 @@ func buildMessage(to, subject, body string, attachments []Attachment, extraHeade
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "From: me\r\nTo: %s\r\nSubject: %s\r\n%sMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"%s\"\r\n\r\n", to, encSubject, extraHeaders, boundary)
 
-	fmt.Fprintf(&buf, "--%s\r\nContent-Type: text/plain; charset=\"UTF-8\"\r\n\r\n%s\r\n", boundary, body)
+	fmt.Fprintf(&buf, "--%s\r\nContent-Type: text/plain; charset=\"UTF-8\"\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n%s\r\n", boundary, encodedBody)
 
 	for _, att := range attachments {
 		mt := att.MimeType
