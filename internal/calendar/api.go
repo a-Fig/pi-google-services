@@ -4,6 +4,8 @@ package calendar
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -202,25 +204,45 @@ func (s *Service) GetFreeBusy(ctx context.Context, calendarIDs []string, timeMin
 			calendarIDs = append(calendarIDs, c.Id)
 		}
 	}
-	req := &gcal.FreeBusyRequest{
-		TimeMin: timeMin.Format(time.RFC3339),
-		TimeMax: timeMax.Format(time.RFC3339),
-		Items:   make([]*gcal.FreeBusyRequestItem, len(calendarIDs)),
-	}
-	for i, id := range calendarIDs {
-		req.Items[i] = &gcal.FreeBusyRequestItem{Id: id}
-	}
-	resp, err := s.svc.Freebusy.Query(req).Do()
-	if err != nil {
-		return nil, fmt.Errorf("freebusy: %w", err)
-	}
-	// A per-calendar API error is not an empty (free) schedule.
-	for id, cal := range resp.Calendars {
-		if len(cal.Errors) > 0 {
-			return nil, fmt.Errorf("freebusy calendar %q: %s", id, cal.Errors[0].Reason)
+	result := make(map[string]gcal.FreeBusyCalendar)
+	// Google permits at most 50 calendars in one free/busy request. Pagination
+	// can discover more than that, so query bounded batches and combine them.
+	for start := 0; start < len(calendarIDs); start += 50 {
+		end := min(start+50, len(calendarIDs))
+		req := &gcal.FreeBusyRequest{
+			TimeMin: timeMin.Format(time.RFC3339),
+			TimeMax: timeMax.Format(time.RFC3339),
+		}
+		for _, id := range calendarIDs[start:end] {
+			req.Items = append(req.Items, &gcal.FreeBusyRequestItem{Id: id})
+		}
+		resp, err := s.svc.Freebusy.Query(req).Do()
+		if err != nil {
+			return nil, fmt.Errorf("freebusy: %w", err)
+		}
+		// A per-calendar API error is not an empty (free) schedule. Report all
+		// failures in this batch in stable order so the caller can narrow its query.
+		var failures []string
+		for id, cal := range resp.Calendars {
+			if len(cal.Errors) > 0 {
+				var reasons []string
+				for _, apiErr := range cal.Errors {
+					reason := "unknown error"
+					if apiErr != nil && apiErr.Reason != "" {
+						reason = apiErr.Reason
+					}
+					reasons = append(reasons, reason)
+				}
+				failures = append(failures, fmt.Sprintf("calendar %q: %s", id, strings.Join(reasons, ", ")))
+			}
+			result[id] = cal
+		}
+		if len(failures) > 0 {
+			sort.Strings(failures)
+			return nil, fmt.Errorf("freebusy: %s", strings.Join(failures, "; "))
 		}
 	}
-	return resp.Calendars, nil
+	return result, nil
 }
 
 func fmtDateTime(dt *gcal.EventDateTime) string {

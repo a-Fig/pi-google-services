@@ -96,3 +96,22 @@ func TestGetAttachmentLegacyIDFallback(t *testing.T) {
 		})
 	}
 }
+
+func TestGetAttachmentUnknownPartDoesNotUseLegacyFallback(t *testing.T) {
+	for _, id := range []string{"0", "3", "2.3", "part:root"} {
+		t.Run(id, func(t *testing.T) {
+			s := &Service{svc: fakeGmailUsersService(t, func(w http.ResponseWriter, r *http.Request) {
+				if !strings.HasSuffix(r.URL.Path, "/messages/m1") {
+					t.Errorf("part handle sent to attachment endpoint: %s", r.URL)
+					http.NotFound(w, r)
+					return
+				}
+				writeJSON(t, w, &gmail.Message{Payload: &gmail.MessagePart{PartId: "0", MimeType: "text/plain", Body: &gmail.MessagePartBody{Data: "dGV4dA"}}})
+			})}
+			_, err := s.GetAttachment(context.Background(), "m1", id)
+			if err == nil || !strings.Contains(err.Error(), "not found in message m1") {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}

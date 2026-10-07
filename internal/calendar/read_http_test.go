@@ -3,9 +3,11 @@ package calendar
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -147,6 +149,56 @@ func TestSharedCalendarErrorsDoNotLookEmptyOrFree(t *testing.T) {
 			}
 			if err == nil || !strings.Contains(err.Error(), "school") {
 				t.Fatalf("want identifiable shared-calendar failure, got %v", err)
+			}
+		})
+	}
+}
+
+func TestFreeBusyBatchesAndReportsAllErrors(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		t.Run(fmt.Sprintf("fail=%t", fail), func(t *testing.T) {
+			var requests atomic.Int32
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				var req gcal.FreeBusyRequest
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					t.Error(err)
+					return
+				}
+				if len(req.Items) > 50 || len(req.Items) == 0 {
+					t.Errorf("invalid batch size %d", len(req.Items))
+				}
+				calendars := map[string]gcal.FreeBusyCalendar{}
+				for _, item := range req.Items {
+					calendars[item.Id] = gcal.FreeBusyCalendar{}
+				}
+				if fail {
+					calendars["calendar-00"] = gcal.FreeBusyCalendar{Errors: []*gcal.Error{{}}}
+					calendars["calendar-01"] = gcal.FreeBusyCalendar{Errors: []*gcal.Error{{Reason: "notFound"}, {Reason: "internalError"}}}
+				}
+				w.Header().Set("Content-Type", "application/json")
+				if err := json.NewEncoder(w).Encode(&gcal.FreeBusyResponse{Calendars: calendars}); err != nil {
+					t.Error(err)
+				}
+			}))
+			defer ts.Close()
+			api, err := gcal.NewService(context.Background(), option.WithEndpoint(ts.URL+"/"), option.WithoutAuthentication(), option.WithHTTPClient(ts.Client()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			s := &Service{svc: api}
+			ids := make([]string, 51)
+			for i := range ids {
+				ids[i] = fmt.Sprintf("calendar-%02d", i)
+			}
+			got, err := s.GetFreeBusy(context.Background(), ids, time.Now(), time.Now().Add(time.Hour))
+			if fail {
+				want := `freebusy: calendar "calendar-00": unknown error; calendar "calendar-01": notFound, internalError`
+				if err == nil || err.Error() != want || got != nil {
+					t.Fatalf("got %+v, %v; want %s", got, err, want)
+				}
+			} else if err != nil || len(got) != 51 || requests.Load() != 2 {
+				t.Fatalf("51-calendar query = %d calendars, %d requests, %v", len(got), requests.Load(), err)
 			}
 		})
 	}

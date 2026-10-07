@@ -222,6 +222,9 @@ func (s *Service) GetAttachment(ctx context.Context, messageID, attachmentID str
 
 	part := findAttachmentPart(msg.Payload, attachmentID, 0)
 	if part == nil {
+		if attachmentID == rootAttachmentID || mimePartIDPattern.MatchString(attachmentID) {
+			return nil, fmt.Errorf("attachment %s not found in message %s; read the message again for its attachment IDs", attachmentID, messageID)
+		}
 		// Older tool results contain Gmail's opaque attachment ID, which may no
 		// longer appear in this fetch. Let Gmail resolve it directly. Its attachment
 		// endpoint returns only bytes, so do not guess another part's metadata.
@@ -307,6 +310,8 @@ func extractBody(part *gmail.MessagePart, depth int) (body string, html bool) {
 // Gmail's root MIME part can have an empty PartId. Give it a stable handle too.
 const rootAttachmentID = "part:root"
 
+var mimePartIDPattern = regexp.MustCompile(`^\d+(\.\d+)*$`)
+
 // extractAttachments walks a message payload collecting every part that carries
 // a filename. Both regular attachments and inline images (cid: references) are
 // returned; Inline distinguishes them.
@@ -345,8 +350,8 @@ func extractAttachments(part *gmail.MessagePart, depth int) []AttachmentInfo {
 }
 
 // findAttachmentPart locates the part an attachment ID refers to. The ID is a
-// MIME part ID, which is what extractAttachments lists, or a Gmail attachment
-// ID where the part has no part ID.
+// MIME part ID (including the root handle), or a legacy Gmail attachment ID
+// still present in this fetch. Unmatched opaque IDs are tried directly by GetAttachment.
 func findAttachmentPart(part *gmail.MessagePart, attachmentID string, depth int) *gmail.MessagePart {
 	if part == nil || depth > 10 || attachmentID == "" {
 		return nil
