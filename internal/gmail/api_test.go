@@ -240,7 +240,7 @@ func TestAttachmentIDSurvivesAnotherFetch(t *testing.T) {
 	}
 }
 
-func TestExtractAttachments_RootPartKeepsAttachmentID(t *testing.T) {
+func TestExtractAttachments_RootPartUsesStableHandle(t *testing.T) {
 	// A message that is nothing but a file has one part and no part ID.
 	payload := &gmail.MessagePart{
 		MimeType: "application/pdf",
@@ -248,8 +248,8 @@ func TestExtractAttachments_RootPartKeepsAttachmentID(t *testing.T) {
 		Body:     &gmail.MessagePartBody{AttachmentId: "att-root", Size: 10},
 	}
 	atts := extractAttachments(payload, 0)
-	if len(atts) != 1 || atts[0].AttachmentID != "att-root" {
-		t.Fatalf("extractAttachments() = %+v, want the attachment ID as the handle", atts)
+	if len(atts) != 1 || atts[0].AttachmentID != "part:root" {
+		t.Fatalf("extractAttachments() = %+v, want the root part handle", atts)
 	}
 }
 
