@@ -56,11 +56,14 @@ func (s *GmailService) Tools() []mcp.ToolDefinition {
 			InputSchema: mcp.InputSchema{
 				Type: "object",
 				Properties: map[string]mcp.PropertySchema{
-					"id": {Type: "string", Description: "Email message ID"},
+					"id":     {Type: "string", Description: "Email message ID"},
+					"offset": {Type: "number", Description: "Unicode character offset for the next body page (default 0)"},
+					"format": {Type: "string", Description: "Optional json for structured body, headers, attachments and nextOffset"},
 				},
 				Required: []string{"id"},
 			},
 		},
+		{Name: "get-thread", Description: "Read a conversation in order, 5 messages per page; long message bodies have get-email continuation offsets.", InputSchema: mcp.InputSchema{Type: "object", Properties: map[string]mcp.PropertySchema{"threadId": {Type: "string"}, "offset": {Type: "number", Description: "Message offset, default 0"}}, Required: []string{"threadId"}}},
 		{
 			Name:        "search-emails",
 			Description: "Search emails by query",
@@ -142,6 +145,8 @@ func (s *GmailService) Handle(ctx context.Context, toolName string, params json.
 	switch toolName {
 	case "list-inbox":
 		return s.handleListInbox(ctx, params)
+	case "get-thread":
+		return s.handleGetThread(ctx, params)
 	case "get-email":
 		return s.handleGetEmail(ctx, params)
 	case "search-emails":
@@ -232,7 +237,9 @@ func formatInboxEntry(i int, m *gmail.EmailSummary) string {
 
 func (s *GmailService) handleGetEmail(ctx context.Context, params json.RawMessage) (interface{}, *mcp.RPCError) {
 	var args struct {
-		ID string `json:"id"`
+		ID     string `json:"id"`
+		Offset int    `json:"offset"`
+		Format string `json:"format"`
 	}
 	if err := json.Unmarshal(params, &args); err != nil {
 		return nil, &mcp.RPCError{Code: -32602, Message: "Invalid arguments", Data: err.Error()}
@@ -246,12 +253,16 @@ func (s *GmailService) handleGetEmail(ctx context.Context, params json.RawMessag
 		return nil, rpcError("get email", err)
 	}
 
-	body := detail.Body
-	if detail.HTML {
-		body = stripHTML(body)
+	page, pageErr := emailPage(detail, args.Offset)
+	if pageErr != nil {
+		return nil, &mcp.RPCError{Code: -32602, Message: pageErr.Error()}
 	}
-	if len(body) > 5000 {
-		body = body[:5000] + "\n\n[...truncated at 5000 chars]"
+	if args.Format == "json" {
+		return jsonContent(page), nil
+	}
+	body := page.Body
+	if page.NextOffset != nil {
+		body += fmt.Sprintf("\n\n[More body: get-email id=%s offset=%d]", detail.ID, *page.NextOffset)
 	}
 
 	result := fmt.Sprintf("📧 %s\nFrom: %s\nTo: %s\nDate: %s",
@@ -488,21 +499,4 @@ func (s *GmailService) resolveAttachments(ctx context.Context, inputs []attachme
 		}
 	}
 	return attachments, nil
-}
-
-// stripHTML removes HTML tags for plain-text display.
-func stripHTML(s string) string {
-	var b strings.Builder
-	inTag := false
-	for _, r := range s {
-		switch {
-		case r == '<':
-			inTag = true
-		case r == '>':
-			inTag = false
-		case !inTag:
-			b.WriteRune(r)
-		}
-	}
-	return strings.TrimSpace(b.String())
 }
