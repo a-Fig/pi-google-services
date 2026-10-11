@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -126,7 +127,8 @@ No browser available — authorize from any device:
   2. Approve the consent screen. Google will redirect to a localhost page
      that FAILS TO LOAD — that is expected.
 
-  3. Copy the full URL from the browser address bar and paste it here.
+  3. On this machine the callback is received automatically. On another
+     device, copy the full URL from the browser address bar and paste it here.
 
 Paste the URL or code (empty line to retry, Ctrl+C to cancel):
 > `, authURL)
@@ -134,7 +136,15 @@ Paste the URL or code (empty line to retry, Ctrl+C to cancel):
 		if !scanner.Scan() {
 			return "", fmt.Errorf("no authorization code entered")
 		}
-		code, err := ParseAuthCode(scanner.Text())
+		pasted := scanner.Text()
+		code, err := ParseAuthCode(pasted)
+		if err == nil && strings.Contains(pasted, "://") {
+			expected, _ := url.Parse(authURL)
+			received, _ := url.Parse(strings.TrimSpace(pasted))
+			if expected.Query().Get("state") != "" && received.Query().Get("state") != expected.Query().Get("state") {
+				err = fmt.Errorf("callback belongs to another sign-in attempt")
+			}
+		}
 		if err == nil {
 			return code, nil
 		}
@@ -145,24 +155,55 @@ Paste the URL or code (empty line to retry, Ctrl+C to cancel):
 	}
 }
 
+// waitForAuthCode joins the manual reader before exchanging or returning. The
+// daemon's stdin pipe and os.Stdin unblock when closed; no stale reader survives
+// to consume input from another sign-in attempt.
+func waitForAuthCode(ctx context.Context, authURL string, input io.ReadCloser, output io.Writer, cb *callbackServer) (string, error) {
+	type result struct {
+		code string
+		err  error
+	}
+	ready := make(chan result, 1)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		code, err := promptForAuthCode(authURL, input, output)
+		ready <- result{code, err}
+	}()
+	defer func() { input.Close(); <-done }()
+	select {
+	case answer := <-ready:
+		return answer.code, answer.err
+	case code := <-cb.codeCh:
+		return code, nil
+	case err := <-cb.errCh:
+		return "", fmt.Errorf("callback: %w", err)
+	case <-ctx.Done():
+		return "", fmt.Errorf("login cancelled: %w", ctx.Err())
+	}
+}
+
 // LoginOptions configures the login flow. Zero values give the classic
 // behavior: try the system browser and fail loudly if unavailable.
 type LoginOptions struct {
-	// NoBrowser skips the browser/loopback flow entirely and prompts for
-	// a pasted authorization URL instead. Use on headless hosts (SSH,
+	// NoBrowser skips launching a browser; either a loopback callback or
+	// a pasted authorization URL completes the flow. Use on headless hosts (SSH,
 	// VPS, containers) or inside WSL when localhost forwarding breaks.
 	NoBrowser bool
 
-	// Input is where the pasted URL is read from in manual mode
+	// Input is where the pasted URL is read from in manual mode. It must
+	// unblock Read when closed; callback/cancellation closes and joins it.
+	// Finite in-memory readers can be wrapped with io.NopCloser.
+	//
 	// (default os.Stdin). Output receives prompts (default os.Stdout).
-	Input  io.Reader
+	Input  io.ReadCloser
 	Output io.Writer
 
 	// OpenBrowser overrides the default browser launcher (tests).
 	OpenBrowser func(string) error
 }
 
-func (o LoginOptions) input() io.Reader {
+func (o LoginOptions) input() io.ReadCloser {
 	if o.Input != nil {
 		return o.Input
 	}
@@ -200,19 +241,23 @@ func (a *Authenticator) LoginWithOptions(ctx context.Context, opts LoginOptions)
 	// The callback server always runs: it allocates the real loopback port
 	// that goes into the authorization URL (port 0 is not a valid
 	// redirect), and catches the redirect whenever a browser is involved.
-	cb, cleanup, err := startCallbackServer()
+	state, err := GeneratePKCE()
+	if err != nil {
+		return nil, fmt.Errorf("generate state: %w", err)
+	}
+	cb, cleanup, err := startCallbackServer(state.CodeVerifier)
 	if err != nil {
 		return nil, err
 	}
 	defer cleanup()
 	a.OAuthConfig.RedirectURL = cb.url
 
-	authURL := a.authCodeURL(pkce)
+	authURL := a.authCodeURL(pkce, state.CodeVerifier)
 
 	var authCode string
 	switch {
 	case opts.NoBrowser:
-		if authCode, err = promptForAuthCode(authURL, opts.input(), opts.output()); err != nil {
+		if authCode, err = waitForAuthCode(ctx, authURL, opts.input(), opts.output(), cb); err != nil {
 			return nil, err
 		}
 	default:
@@ -220,7 +265,7 @@ func (a *Authenticator) LoginWithOptions(ctx context.Context, opts LoginOptions)
 		if openErr := opts.openBrowser()(authURL); openErr != nil {
 			// Browser unavailable: degrade to manual paste instead of dying.
 			fmt.Fprintln(opts.output(), "\n⚠ Could not launch a browser — switching to manual mode.")
-			if authCode, err = promptForAuthCode(authURL, opts.input(), opts.output()); err != nil {
+			if authCode, err = waitForAuthCode(ctx, authURL, opts.input(), opts.output(), cb); err != nil {
 				return nil, err
 			}
 			break
@@ -253,8 +298,8 @@ func (a *Authenticator) LoginWithOptions(ctx context.Context, opts LoginOptions)
 }
 
 // authCodeURL builds the Google authorization URL with PKCE parameters.
-func (a *Authenticator) authCodeURL(pkce *PKCEParams) string {
-	return a.OAuthConfig.AuthCodeURL("state",
+func (a *Authenticator) authCodeURL(pkce *PKCEParams, state string) string {
+	return a.OAuthConfig.AuthCodeURL(state,
 		oauth2.SetAuthURLParam("code_challenge", pkce.CodeChallenge),
 		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
 	)
@@ -284,7 +329,7 @@ type callbackServer struct {
 
 // startCallbackServer binds a loopback listener and serves the OAuth
 // callback handler on a random port. Call cleanup when done.
-func startCallbackServer() (*callbackServer, func(), error) {
+func startCallbackServer(state string) (*callbackServer, func(), error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, nil, fmt.Errorf("listen: %w", err)
@@ -295,18 +340,23 @@ func startCallbackServer() (*callbackServer, func(), error) {
 	codeCh := make(chan string, 1)
 	errCh := make(chan error, 1)
 
+	var once sync.Once
 	mux := http.NewServeMux()
 	mux.HandleFunc(redirectPath, func(w http.ResponseWriter, r *http.Request) {
-		code := r.URL.Query().Get("code")
-		if code == "" {
-			errCh <- fmt.Errorf("no code in callback: %s", r.URL.String())
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, "Authorization failed. Close this window and try again.")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		if r.URL.Query().Get("state") != state {
+			http.Error(w, "This callback belongs to another sign-in attempt. Return to your current sign-in page.", http.StatusBadRequest)
 			return
 		}
-		codeCh <- code
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "✓ Authorized! You can close this window and return to Pi.")
+		code := r.URL.Query().Get("code")
+		if code == "" {
+			once.Do(func() { errCh <- fmt.Errorf("authorization callback did not contain a code") })
+			http.Error(w, "Google sign-in was not completed. Return to setup to try again.", http.StatusBadRequest)
+			return
+		}
+		once.Do(func() { codeCh <- code })
+		fmt.Fprint(w, "Sign-in code received. The connection is still finishing; return to setup or the terminal to check its result.")
 	})
 
 	server := &http.Server{Handler: mux}

@@ -1,8 +1,10 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -11,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/oauth2"
 
@@ -235,11 +238,11 @@ func TestLoginManualMode(t *testing.T) {
 	a, _ := newTestAuthenticator(t, fakeTokenJSON)
 
 	var out strings.Builder
-	in := strings.NewReader("http://localhost:9999/oauth/callback?state=state&code=pasted-code\n")
+	in := strings.NewReader("pasted-code\n")
 
 	token, err := a.LoginWithOptions(context.Background(), LoginOptions{
 		NoBrowser: true,
-		Input:     in,
+		Input:     io.NopCloser(in),
 		Output:    &out,
 	})
 	if err != nil {
@@ -261,7 +264,7 @@ func TestLoginBrowserFailureFallsBackToManual(t *testing.T) {
 	in := strings.NewReader("raw-pasted-code-123\n")
 
 	token, err := a.LoginWithOptions(context.Background(), LoginOptions{
-		Input:       in,
+		Input:       io.NopCloser(in),
 		Output:      &out,
 		OpenBrowser: func(url string) error { return fmt.Errorf("no browser here") },
 	})
@@ -293,7 +296,7 @@ func TestLoginBrowserFlowEndToEnd(t *testing.T) {
 			if err != nil {
 				return
 			}
-			callback := fmt.Sprintf("http://localhost:%s%s?state=state&code=e2e-code", ru.Port(), ru.Path)
+			callback := fmt.Sprintf("http://localhost:%s%s?state=%s&code=e2e-code", ru.Port(), ru.Path, u.Query().Get("state"))
 			http.Get(callback) //nolint:errcheck // best-effort simulation
 		}()
 		return nil
@@ -302,7 +305,7 @@ func TestLoginBrowserFlowEndToEnd(t *testing.T) {
 	var out strings.Builder
 
 	token, err := a.LoginWithOptions(context.Background(), LoginOptions{
-		Input:       strings.NewReader(""),
+		Input:       io.NopCloser(strings.NewReader("")),
 		Output:      &out,
 		OpenBrowser: openStub,
 	})
@@ -351,11 +354,11 @@ func TestLoginManualModeUsesRealLoopbackPort(t *testing.T) {
 	a, _ := newTestAuthenticator(t, fakeTokenJSON)
 
 	var out strings.Builder
-	in := strings.NewReader("http://localhost:9999/oauth/callback?code=c\n")
+	in := strings.NewReader("c\n")
 
 	if _, err := a.LoginWithOptions(context.Background(), LoginOptions{
 		NoBrowser: true,
-		Input:     in,
+		Input:     io.NopCloser(in),
 		Output:    &out,
 	}); err != nil {
 		t.Fatalf("LoginWithOptions(manual): %v", err)
@@ -371,5 +374,161 @@ func TestLoginManualModeUsesRealLoopbackPort(t *testing.T) {
 	port, err := strconv.Atoi(m[1])
 	if err != nil || port <= 0 || port > 65535 {
 		t.Errorf("RedirectURL port = %q, want a valid TCP port", m[1])
+	}
+}
+
+// A manual login on the same host can receive the callback without any paste.
+func TestManualCallbackCompletesAndClosesReader(t *testing.T) {
+	withTempConfigDir(t)
+	input, writer := io.Pipe()
+	defer writer.Close()
+	var output bytes.Buffer
+	cb, cleanup, err := startCallbackServer("expected-state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	done := make(chan error, 1)
+	go func() {
+		code, err := waitForAuthCode(context.Background(), "https://example.test/auth?state=expected-state", input, &output, cb)
+		if code != "received" && err == nil {
+			err = fmt.Errorf("wrong code: %s", code)
+		}
+		done <- err
+	}()
+	response, err := http.Get(cb.url + "?state=wrong&code=wrong")
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatal("wrong state accepted")
+	}
+	response, err = http.Get(cb.url + "?state=expected-state&code=received")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(response.Body)
+	response.Body.Close()
+	if strings.Contains(string(body), "Authorized!") || !strings.Contains(string(body), "still finishing") {
+		t.Fatalf("misleading callback: %s", body)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("manual reader did not drain")
+	}
+	// A duplicate never blocks, even when the first result was already consumed.
+	response, err = http.Get(cb.url + "?state=expected-state&code=duplicate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if _, err := writer.Write([]byte("late-code\n")); err == nil {
+		t.Fatal("reader remained open")
+	}
+}
+
+func TestManualWaitCancellationDrainsInput(t *testing.T) {
+	input, writer := io.Pipe()
+	defer writer.Close()
+	cb, cleanup, err := startCallbackServer("state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := waitForAuthCode(ctx, "https://example.test/auth?state=state", input, io.Discard, cb)
+		done <- err
+	}()
+	cancel()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("cancel succeeded")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("cancellation leaked reader")
+	}
+}
+
+func TestManualPastedURLRequiresCurrentState(t *testing.T) {
+	var output bytes.Buffer
+	code, err := promptForAuthCode("https://example.test/auth?state=current", strings.NewReader("http://localhost:123/oauth/callback?state=stale&code=wrong\nhttp://localhost:123/oauth/callback?state=current&code=right\n"), &output)
+	if err != nil || code != "right" {
+		t.Fatalf("code=%s err=%v", code, err)
+	}
+}
+
+type callbackOutput struct {
+	t     *testing.T
+	fired bool
+	body  chan string
+}
+
+func (o *callbackOutput) Write(p []byte) (int, error) {
+	if !o.fired {
+		fields := strings.Fields(string(p))
+		for _, field := range fields {
+			if !strings.Contains(field, "/auth?") {
+				continue
+			}
+			u, err := url.Parse(field)
+			if err != nil {
+				continue
+			}
+			redirect, _ := url.Parse(u.Query().Get("redirect_uri"))
+			q := redirect.Query()
+			q.Set("state", u.Query().Get("state"))
+			q.Set("code", "callback-code")
+			redirect.RawQuery = q.Encode()
+			o.fired = true
+			go func() {
+				response, err := http.Get(redirect.String())
+				if err != nil {
+					o.body <- "request failed: " + err.Error()
+					return
+				}
+				body, _ := io.ReadAll(response.Body)
+				response.Body.Close()
+				o.body <- string(body)
+			}()
+			break
+		}
+	}
+	return len(p), nil
+}
+
+func TestLoginNoBrowserAcceptsCallbackWithoutPaste(t *testing.T) {
+	withTempConfigDir(t)
+	a, _ := newTestAuthenticator(t, fakeTokenJSON)
+	input, writer := io.Pipe()
+	defer writer.Close()
+	output := &callbackOutput{t: t, body: make(chan string, 1)}
+	token, err := a.LoginWithOptions(context.Background(), LoginOptions{NoBrowser: true, Input: input, Output: output})
+	if err != nil || token == nil || token.AccessToken != "fake-at" {
+		t.Fatalf("token=%v err=%v", token, err)
+	}
+	if body := <-output.body; !strings.Contains(body, "still finishing") || strings.Contains(body, "Authorized!") {
+		t.Fatal(body)
+	}
+}
+
+func TestCallbackDoesNotClaimAuthorizationWhenExchangeFails(t *testing.T) {
+	withTempConfigDir(t)
+	a, _ := newTestAuthenticator(t, `{ "error": "invalid_grant" }`)
+	input, writer := io.Pipe()
+	defer writer.Close()
+	output := &callbackOutput{t: t, body: make(chan string, 1)}
+	if _, err := a.LoginWithOptions(context.Background(), LoginOptions{NoBrowser: true, Input: input, Output: output}); err == nil {
+		t.Fatal("failed exchange accepted")
+	}
+	if body := <-output.body; strings.Contains(body, "Authorized!") || !strings.Contains(body, "check its result") {
+		t.Fatal(body)
 	}
 }
