@@ -119,8 +119,8 @@ No browser available — authorize from any device:
 
      %s
 
-  2. Approve the consent screen. Google will redirect to a localhost page
-     that FAILS TO LOAD — that is expected.
+  2. Approve the consent screen. Google redirects to this machine's
+     localhost callback. On another device that page cannot load.
 
   3. On this machine the callback is received automatically. On another
      device, copy the full URL from the browser address bar and paste it here.

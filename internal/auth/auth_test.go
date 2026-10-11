@@ -637,3 +637,11 @@ func TestDefaultBlockingStdinCallbackNeedsNoPaste(t *testing.T) {
 		t.Fatal("default blocking stdin prevented callback completion")
 	}
 }
+
+func TestPromptExplainsLocalCallbackAndRemotePaste(t *testing.T) {
+	var output bytes.Buffer
+	printAuthPrompt("https://example.test/auth", &output)
+	if strings.Contains(output.String(), "FAILS TO LOAD") || !strings.Contains(output.String(), "On another device that page cannot load") || !strings.Contains(output.String(), "callback is received automatically") {
+		t.Fatal(output.String())
+	}
+}
