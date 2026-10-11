@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -530,5 +532,108 @@ func TestCallbackDoesNotClaimAuthorizationWhenExchangeFails(t *testing.T) {
 	}
 	if body := <-output.body; strings.Contains(body, "Authorized!") || !strings.Contains(body, "check its result") {
 		t.Fatal(body)
+	}
+}
+
+func TestStaleDenialDoesNotEndCurrentAttempt(t *testing.T) {
+	var output bytes.Buffer
+	code, err := promptForAuthCode("https://example.test/auth?state=current", strings.NewReader("http://localhost:123/oauth/callback?state=old&error=access_denied\nright-code\n"), &output)
+	if err != nil || code != "right-code" {
+		t.Fatalf("code=%s err=%v", code, err)
+	}
+}
+
+func TestCallbackAfterFailureCannotClaimCodeReceived(t *testing.T) {
+	cb, cleanup, err := startCallbackServer("state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	client := &http.Client{Timeout: time.Second}
+	response, err := client.Get(cb.url + "?state=state&error=access_denied")
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if err := <-cb.errCh; !strings.Contains(err.Error(), "access_denied") {
+		t.Fatal(err)
+	}
+	response, err = client.Get(cb.url + "?state=state&code=late")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(response.Body)
+	response.Body.Close()
+	if response.StatusCode != http.StatusBadRequest || strings.Contains(string(body), "code received") {
+		t.Fatalf("status=%d body=%s", response.StatusCode, body)
+	}
+}
+
+// The subprocess deliberately inherits a blocking OS stdin pipe and receives
+// no line at all. io.Pipe-only tests would miss an os.Stdin Close/join deadlock.
+func TestAuthStdinChild(t *testing.T) {
+	if os.Getenv("VI_AUTH_STDIN_CHILD") != "1" {
+		t.Skip("subprocess helper")
+	}
+	withTempConfigDir(t)
+	a, _ := newTestAuthenticator(t, fakeTokenJSON)
+	if _, err := a.LoginWithOptions(context.Background(), LoginOptions{NoBrowser: true}); err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println("AUTH_CALLBACK_COMPLETE")
+}
+
+func TestDefaultBlockingStdinCallbackNeedsNoPaste(t *testing.T) {
+	cmd := exec.Command(os.Args[0], "-test.run=^TestAuthStdinChild$")
+	cmd.Env = append(os.Environ(), "VI_AUTH_STDIN_CHILD=1")
+	input, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer input.Close()
+	output, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer cmd.Process.Kill()
+	scanner := bufio.NewScanner(output)
+	var authURL *url.URL
+	for scanner.Scan() {
+		for _, field := range strings.Fields(scanner.Text()) {
+			if strings.Contains(field, "/auth?") {
+				authURL, err = url.Parse(field)
+				break
+			}
+		}
+		if authURL != nil {
+			break
+		}
+	}
+	if authURL == nil || err != nil {
+		t.Fatalf("no child auth URL: %v", err)
+	}
+	redirect, _ := url.Parse(authURL.Query().Get("redirect_uri"))
+	query := redirect.Query()
+	query.Set("state", authURL.Query().Get("state"))
+	query.Set("code", "actual-stdin-callback")
+	redirect.RawQuery = query.Encode()
+	response, err := (&http.Client{Timeout: time.Second}).Get(redirect.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("default blocking stdin prevented callback completion")
 	}
 }

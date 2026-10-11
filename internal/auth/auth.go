@@ -111,13 +111,8 @@ func NewFromCredentials(creds *config.Credentials, scopes []string) *Authenticat
 	}
 }
 
-// promptForAuthCode shows the auth URL with manual-mode instructions and
-// reads user input until it can parse an authorization code. It re-prompts
-// on unparseable input and fails immediately on a denied authorization.
-func promptForAuthCode(authURL string, input io.Reader, output io.Writer) (string, error) {
-	scanner := bufio.NewScanner(input)
-	for {
-		fmt.Fprintf(output, `
+func printAuthPrompt(authURL string, output io.Writer) {
+	fmt.Fprintf(output, `
 No browser available — authorize from any device:
 
   1. Open this URL (on this machine or your phone):
@@ -132,19 +127,20 @@ No browser available — authorize from any device:
 
 Paste the URL or code (empty line to retry, Ctrl+C to cancel):
 > `, authURL)
+}
+
+// promptForAuthCode shows the auth URL with manual-mode instructions and
+// reads user input until it can parse an authorization code. It re-prompts
+// on unparseable input and fails immediately on a denied authorization.
+func promptForAuthCode(authURL string, input io.Reader, output io.Writer) (string, error) {
+	scanner := bufio.NewScanner(input)
+	for {
+		printAuthPrompt(authURL, output)
 
 		if !scanner.Scan() {
 			return "", fmt.Errorf("no authorization code entered")
 		}
-		pasted := scanner.Text()
-		code, err := ParseAuthCode(pasted)
-		if err == nil && strings.Contains(pasted, "://") {
-			expected, _ := url.Parse(authURL)
-			received, _ := url.Parse(strings.TrimSpace(pasted))
-			if expected.Query().Get("state") != "" && received.Query().Get("state") != expected.Query().Get("state") {
-				err = fmt.Errorf("callback belongs to another sign-in attempt")
-			}
-		}
+		code, err := parseAttemptCode(authURL, scanner.Text())
 		if err == nil {
 			return code, nil
 		}
@@ -155,31 +151,95 @@ Paste the URL or code (empty line to retry, Ctrl+C to cancel):
 	}
 }
 
-// waitForAuthCode joins the manual reader before exchanging or returning. The
-// daemon's stdin pipe and os.Stdin unblock when closed; no stale reader survives
-// to consume input from another sign-in attempt.
-func waitForAuthCode(ctx context.Context, authURL string, input io.ReadCloser, output io.Writer, cb *callbackServer) (string, error) {
-	type result struct {
-		code string
-		err  error
+// Check attempt binding before interpreting denial as well as successful codes.
+func parseAttemptCode(authURL, pasted string) (string, error) {
+	if strings.Contains(pasted, "://") {
+		expected, _ := url.Parse(authURL)
+		received, err := url.Parse(strings.TrimSpace(pasted))
+		if err != nil {
+			return "", fmt.Errorf("invalid callback URL")
+		}
+		if expected.Query().Get("state") != "" && received.Query().Get("state") != expected.Query().Get("state") {
+			return "", fmt.Errorf("callback belongs to another sign-in attempt")
+		}
 	}
-	ready := make(chan result, 1)
+	return ParseAuthCode(pasted)
+}
+
+type inputLine struct {
+	text string
+	err  error
+}
+
+func scanInput(input io.Reader, stop <-chan struct{}) (<-chan inputLine, <-chan struct{}) {
+	lines := make(chan inputLine, 1)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		code, err := promptForAuthCode(authURL, input, output)
-		ready <- result{code, err}
+		defer close(lines)
+		scanner := bufio.NewScanner(input)
+		for scanner.Scan() {
+			select {
+			case lines <- inputLine{text: scanner.Text()}:
+			case <-stop:
+				return
+			}
+		}
+		err := scanner.Err()
+		if err == nil {
+			err = io.EOF
+		}
+		select {
+		case lines <- inputLine{err: err}:
+		case <-stop:
+		}
 	}()
-	defer func() { input.Close(); <-done }()
-	select {
-	case answer := <-ready:
-		return answer.code, answer.err
-	case code := <-cb.codeCh:
-		return code, nil
-	case err := <-cb.errCh:
-		return "", fmt.Errorf("callback: %w", err)
-	case <-ctx.Done():
-		return "", fmt.Errorf("login cancelled: %w", ctx.Err())
+	return lines, done
+}
+
+var stdinOnce sync.Once
+var stdinLines <-chan inputLine
+
+// Blocking terminal/inherited stdin cannot reliably be interrupted by Close.
+// One process-wide pump owns it; attempts never create another OS reader. The
+// login CLI exits after completion, reclaiming that one blocked reader.
+func processStdinLines() <-chan inputLine {
+	stdinOnce.Do(func() { stdinLines, _ = scanInput(os.Stdin, nil) })
+	return stdinLines
+}
+
+func waitForAuthCode(ctx context.Context, authURL string, input io.ReadCloser, output io.Writer, cb *callbackServer) (string, error) {
+	var lines <-chan inputLine
+	if input == nil {
+		lines = processStdinLines()
+	} else {
+		stop := make(chan struct{})
+		var done <-chan struct{}
+		lines, done = scanInput(input, stop)
+		defer func() { close(stop); input.Close(); <-done }()
+	}
+	for {
+		printAuthPrompt(authURL, output)
+		select {
+		case answer, ok := <-lines:
+			if !ok || answer.err != nil {
+				return "", fmt.Errorf("no authorization code entered")
+			}
+			code, err := parseAttemptCode(authURL, answer.text)
+			if err == nil {
+				return code, nil
+			}
+			if strings.Contains(err.Error(), "denied") {
+				return "", err
+			}
+			fmt.Fprintf(output, "Invalid input: %v\n", err)
+		case code := <-cb.codeCh:
+			return code, nil
+		case err := <-cb.errCh:
+			return "", fmt.Errorf("callback: %w", err)
+		case <-ctx.Done():
+			return "", fmt.Errorf("login cancelled: %w", ctx.Err())
+		}
 	}
 }
 
@@ -195,7 +255,8 @@ type LoginOptions struct {
 	// unblock Read when closed; callback/cancellation closes and joins it.
 	// Finite in-memory readers can be wrapped with io.NopCloser.
 	//
-	// (default os.Stdin). Output receives prompts (default os.Stdout).
+	// Nil uses the single process-wide stdin reader. Output receives prompts
+	// (default os.Stdout).
 	Input  io.ReadCloser
 	Output io.Writer
 
@@ -207,7 +268,7 @@ func (o LoginOptions) input() io.ReadCloser {
 	if o.Input != nil {
 		return o.Input
 	}
-	return os.Stdin
+	return nil
 }
 
 func (o LoginOptions) output() io.Writer {
@@ -282,6 +343,7 @@ func (a *Authenticator) LoginWithOptions(ctx context.Context, opts LoginOptions)
 		}
 	}
 
+	fmt.Fprintln(opts.output(), "Authorization code received, exchanging for tokens...")
 	token, err := a.exchange(ctx, pkce, authCode)
 	if err != nil {
 		return nil, err
@@ -327,6 +389,10 @@ type callbackServer struct {
 	errCh  <-chan error
 }
 
+func cbURLForRequest(r *http.Request) string {
+	return "http://localhost" + r.URL.RequestURI()
+}
+
 // startCallbackServer binds a loopback listener and serves the OAuth
 // callback handler on a random port. Call cleanup when done.
 func startCallbackServer(state string) (*callbackServer, func(), error) {
@@ -341,6 +407,8 @@ func startCallbackServer(state string) (*callbackServer, func(), error) {
 	errCh := make(chan error, 1)
 
 	var once sync.Once
+	var resultFailed bool
+	var resultMu sync.Mutex
 	mux := http.NewServeMux()
 	mux.HandleFunc(redirectPath, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
@@ -349,10 +417,16 @@ func startCallbackServer(state string) (*callbackServer, func(), error) {
 			http.Error(w, "This callback belongs to another sign-in attempt. Return to your current sign-in page.", http.StatusBadRequest)
 			return
 		}
-		code := r.URL.Query().Get("code")
-		if code == "" {
-			once.Do(func() { errCh <- fmt.Errorf("authorization callback did not contain a code") })
+		resultMu.Lock()
+		defer resultMu.Unlock()
+		code, callbackErr := ParseAuthCode(cbURLForRequest(r))
+		if callbackErr != nil {
+			once.Do(func() { resultFailed = true; errCh <- callbackErr })
 			http.Error(w, "Google sign-in was not completed. Return to setup to try again.", http.StatusBadRequest)
+			return
+		}
+		if resultFailed {
+			http.Error(w, "This sign-in attempt has already failed. Return to setup to try again.", http.StatusBadRequest)
 			return
 		}
 		once.Do(func() { codeCh <- code })
