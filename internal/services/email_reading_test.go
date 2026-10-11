@@ -42,3 +42,13 @@ func TestEmailPagesPreserveEveryCharacter(t *testing.T) {
 		}
 	}
 }
+
+func TestHTMLImplicitHeadAndLayout(t *testing.T) {
+	if got := stripHTML("<html><head><title>hidden title</title><style>hidden style</style><body><p>Hello</p></body></html>"); got != "Hello" {
+		t.Fatalf("implicit head: %q", got)
+	}
+	got := stripHTML("<pre>first\n  indented\nlast</pre><table><tr><td>Total</td><td>$45</td></tr></table><h6>Heading</h6>")
+	if !strings.Contains(got, "first\n  indented\nlast") || strings.Contains(got, "Total$45") || !strings.Contains(got, "$45\n") {
+		t.Fatalf("layout: %q", got)
+	}
+}

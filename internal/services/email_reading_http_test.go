@@ -22,7 +22,7 @@ func fixtureGmail(t *testing.T) *GmailService {
 	t.Helper()
 	client := &http.Client{Transport: mailFixtureTransport(func(r *http.Request) (*http.Response, error) {
 		payload := func(id string) *gmailapi.Message {
-			return &gmailapi.Message{Id: id, ThreadId: "t", Payload: &gmailapi.MessagePart{MimeType: "multipart/mixed", Headers: []*gmailapi.MessagePartHeader{{Name: "From", Value: "sender@example.test"}, {Name: "Subject", Value: "Fixture"}}, Parts: []*gmailapi.MessagePart{{MimeType: "text/plain", Body: &gmailapi.MessagePartBody{Data: base64.RawURLEncoding.EncodeToString([]byte(strings.Repeat("x", 5001)))}}, {Filename: "note.txt", MimeType: "text/plain", Body: &gmailapi.MessagePartBody{AttachmentId: "a", Size: 7}}}}}
+			return &gmailapi.Message{Id: id, ThreadId: "t", Payload: &gmailapi.MessagePart{MimeType: "multipart/mixed", Headers: []*gmailapi.MessagePartHeader{{Name: "From", Value: "sender@example.test"}, {Name: "Subject", Value: "Fixture"}, {Name: "Authentication-Results", Value: "mx; dmarc=fail"}}, Parts: []*gmailapi.MessagePart{{MimeType: "text/plain", Body: &gmailapi.MessagePartBody{Data: base64.RawURLEncoding.EncodeToString([]byte(strings.Repeat("x", 5001)))}}, {Filename: "note.txt", MimeType: "text/plain", Body: &gmailapi.MessagePartBody{AttachmentId: "a", Size: 7}}}}}
 		}
 		var value interface{}
 		if strings.Contains(r.URL.Path, "/threads/") {
@@ -73,6 +73,9 @@ func TestEmailHandlerContinuationAndThreadPages(t *testing.T) {
 		t.Fatal(err)
 	}
 	first := resultJSON(t, value)
+	if first["dmarc"] != "fail" {
+		t.Fatalf("lost DMARC: %+v", first)
+	}
 	if first["nextOffset"] != float64(5000) || len(first["body"].(string)) != 5000 || len(first["attachments"].([]interface{})) != 1 {
 		t.Fatalf("first: %+v", first)
 	}

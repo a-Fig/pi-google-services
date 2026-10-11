@@ -20,9 +20,10 @@ func stripHTML(source string) string {
 	tokenizer := html.NewTokenizer(strings.NewReader(source))
 	var out strings.Builder
 	hidden := ""
+	pre := false
 	block := func(tag string) bool {
 		switch tag {
-		case "br", "p", "div", "li", "tr", "h1", "h2", "h3", "blockquote", "pre":
+		case "br", "p", "div", "li", "tr", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre", "td", "th", "table", "ul", "ol", "hr":
 			return true
 		}
 		return false
@@ -40,16 +41,26 @@ func stripHTML(source string) string {
 			continue
 		}
 		if kind == html.StartTagToken || kind == html.SelfClosingTagToken {
-			if token.Data == "script" || token.Data == "style" || token.Data == "head" {
+			if token.Data == "script" || token.Data == "style" || token.Data == "title" {
 				hidden = token.Data
 				continue
+			}
+			if token.Data == "pre" {
+				pre = true
 			}
 			if block(token.Data) {
 				out.WriteByte('\n')
 			}
 		} else if kind == html.EndTagToken && block(token.Data) {
+			if token.Data == "pre" {
+				pre = false
+			}
 			out.WriteByte('\n')
 		} else if kind == html.TextToken {
+			if pre {
+				out.WriteString(token.Data)
+				continue
+			}
 			space := false
 			for _, r := range token.Data {
 				if unicode.IsSpace(r) {
@@ -64,11 +75,7 @@ func stripHTML(source string) string {
 			}
 		}
 	}
-	lines := strings.Split(out.String(), "\n")
-	for i := range lines {
-		lines[i] = strings.TrimSpace(lines[i])
-	}
-	return strings.TrimSpace(strings.Join(lines, "\n"))
+	return strings.TrimSpace(out.String())
 }
 
 type bodyPage struct {
@@ -77,6 +84,7 @@ type bodyPage struct {
 	From        string                 `json:"from"`
 	To          string                 `json:"to"`
 	Subject     string                 `json:"subject"`
+	Dmarc       string                 `json:"dmarc"`
 	Date        string                 `json:"date"`
 	Body        string                 `json:"body"`
 	Offset      int                    `json:"offset"`
@@ -95,7 +103,7 @@ func emailPage(detail *gmail.EmailDetail, offset int) (*bodyPage, error) {
 		return nil, fmt.Errorf("offset must be between 0 and %d", len(chars))
 	}
 	end := min(offset+5000, len(chars))
-	page := &bodyPage{ID: detail.ID, ThreadID: detail.ThreadID, From: detail.From, To: detail.To, Subject: detail.Subject, Date: detail.Date, Body: string(chars[offset:end]), Offset: offset, Total: len(chars), Attachments: detail.Attachments}
+	page := &bodyPage{ID: detail.ID, ThreadID: detail.ThreadID, From: detail.From, To: detail.To, Subject: detail.Subject, Date: detail.Date, Dmarc: detail.Dmarc, Body: string(chars[offset:end]), Offset: offset, Total: len(chars), Attachments: detail.Attachments}
 	if end < len(chars) {
 		page.NextOffset = &end
 	}
