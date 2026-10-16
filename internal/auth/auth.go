@@ -134,7 +134,15 @@ Paste the URL or code (empty line to retry, Ctrl+C to cancel):
 		if !scanner.Scan() {
 			return "", fmt.Errorf("no authorization code entered")
 		}
-		code, err := ParseAuthCode(scanner.Text())
+		pasted := strings.TrimSpace(scanner.Text())
+		if strings.Contains(pasted, "://") {
+			u, parseErr := url.Parse(pasted)
+			auth, _ := url.Parse(authURL)
+			if parseErr == nil && auth.Query().Get("state") != "" && u.Query().Get("state") != auth.Query().Get("state") {
+				return "", fmt.Errorf("authorization state mismatch; start sign-in again")
+			}
+		}
+		code, err := ParseAuthCode(pasted)
 		if err == nil {
 			return code, nil
 		}
@@ -152,6 +160,9 @@ type LoginOptions struct {
 	// a pasted authorization URL instead. Use on headless hosts (SSH,
 	// VPS, containers) or inside WSL when localhost forwarding breaks.
 	NoBrowser bool
+
+	// RedirectURL uses a web client callback and reads the result from stdin without a listener.
+	RedirectURL string
 
 	// Input is where the pasted URL is read from in manual mode
 	// (default os.Stdin). Output receives prompts (default os.Stdout).
@@ -197,21 +208,33 @@ func (a *Authenticator) LoginWithOptions(ctx context.Context, opts LoginOptions)
 		return nil, fmt.Errorf("generate pkce: %w", err)
 	}
 
-	// The callback server always runs: it allocates the real loopback port
-	// that goes into the authorization URL (port 0 is not a valid
-	// redirect), and catches the redirect whenever a browser is involved.
-	cb, cleanup, err := startCallbackServer()
-	if err != nil {
-		return nil, err
+	var cb *callbackServer
+	if opts.RedirectURL != "" {
+		u, err := url.Parse(opts.RedirectURL)
+		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+			return nil, fmt.Errorf("redirect URL must be an HTTPS callback without query or fragment")
+		}
+		a.OAuthConfig.RedirectURL = opts.RedirectURL
+	} else {
+		var cleanup func()
+		cb, cleanup, err = startCallbackServer(pkce.CodeChallenge)
+		if err != nil {
+			return nil, err
+		}
+		defer cleanup()
+		a.OAuthConfig.RedirectURL = cb.url
 	}
-	defer cleanup()
-	a.OAuthConfig.RedirectURL = cb.url
 
-	authURL := a.authCodeURL(pkce)
+	var authOptions []oauth2.AuthCodeOption
+	if opts.RedirectURL != "" {
+		// A portal handover must yield a refresh token, including on repeat sign-ins.
+		authOptions = []oauth2.AuthCodeOption{oauth2.AccessTypeOffline, oauth2.ApprovalForce}
+	}
+	authURL := a.authCodeURL(pkce, authOptions...)
 
 	var authCode string
 	switch {
-	case opts.NoBrowser:
+	case opts.NoBrowser || opts.RedirectURL != "":
 		if authCode, err = promptForAuthCode(authURL, opts.input(), opts.output()); err != nil {
 			return nil, err
 		}
@@ -253,11 +276,12 @@ func (a *Authenticator) LoginWithOptions(ctx context.Context, opts LoginOptions)
 }
 
 // authCodeURL builds the Google authorization URL with PKCE parameters.
-func (a *Authenticator) authCodeURL(pkce *PKCEParams) string {
-	return a.OAuthConfig.AuthCodeURL("state",
+func (a *Authenticator) authCodeURL(pkce *PKCEParams, options ...oauth2.AuthCodeOption) string {
+	options = append(options,
 		oauth2.SetAuthURLParam("code_challenge", pkce.CodeChallenge),
 		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
 	)
+	return a.OAuthConfig.AuthCodeURL(pkce.CodeChallenge, options...)
 }
 
 // exchange trades an authorization code for tokens using the PKCE verifier
@@ -284,7 +308,7 @@ type callbackServer struct {
 
 // startCallbackServer binds a loopback listener and serves the OAuth
 // callback handler on a random port. Call cleanup when done.
-func startCallbackServer() (*callbackServer, func(), error) {
+func startCallbackServer(state string) (*callbackServer, func(), error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, nil, fmt.Errorf("listen: %w", err)
@@ -297,6 +321,10 @@ func startCallbackServer() (*callbackServer, func(), error) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc(redirectPath, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("state") != state {
+			http.Error(w, "Authorization state mismatch", http.StatusBadRequest)
+			return
+		}
 		code := r.URL.Query().Get("code")
 		if code == "" {
 			errCh <- fmt.Errorf("no code in callback: %s", r.URL.String())
