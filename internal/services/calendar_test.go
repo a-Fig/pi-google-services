@@ -3,10 +3,13 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/sombi/pi-google-services/internal/calendar"
+	"github.com/sombi/pi-google-services/internal/mcp"
 )
 
 // mockCalendarAPI implements calendar operations without real API calls.
@@ -75,6 +78,75 @@ func TestCalendarServiceTools(t *testing.T) {
 	}
 }
 
+func TestCalendarToolSchemasExposeSharedCalendarFeatures(t *testing.T) {
+	tools := (&CalendarService{}).Tools()
+	byName := make(map[string]map[string]mcp.PropertySchema, len(tools))
+	for _, tool := range tools {
+		byName[tool.Name] = tool.InputSchema.Properties
+	}
+
+	for _, toolName := range []string{"create-event", "update-event"} {
+		if _, ok := byName[toolName]["calendarId"]; !ok {
+			t.Errorf("%s missing calendarId", toolName)
+		}
+		if _, ok := byName[toolName]["colorId"]; !ok {
+			t.Errorf("%s missing colorId", toolName)
+		}
+	}
+	if _, ok := byName["search-events"]["calendarId"]; !ok {
+		t.Error("search-events missing calendarId")
+	}
+}
+
+func TestFormatEventsIncludesIDsCalendarAndColor(t *testing.T) {
+	got := formatEvents([]*calendar.EventSummary{{
+		ID:         "event-123",
+		CalendarID: "school@example.com",
+		ColorID:    "11",
+		Summary:    "Calc 1 Exam",
+		Start:      "Sun Aug 30 13:00 PDT",
+		End:        "Sun Aug 30 15:00 PDT",
+	}})
+	for _, want := range []string{"event-123", "school@example.com", "Color ID: 11"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("formatEvents() missing %q in %q", want, got)
+		}
+	}
+}
+
+func TestFormatEventsNamesTheCalendarWhenReadAcrossAll(t *testing.T) {
+	got := formatEvents([]*calendar.EventSummary{{
+		ID:           "event-123",
+		CalendarID:   "abc123@group.calendar.google.com",
+		CalendarName: "School / Study",
+		Summary:      "Calc 1 Exam",
+	}})
+	if want := "Calendar: School / Study (abc123@group.calendar.google.com)"; !strings.Contains(got, want) {
+		t.Errorf("formatEvents() missing %q in %q", want, got)
+	}
+}
+
+func TestCalendarReadsDoNotClaimToDefaultToPrimary(t *testing.T) {
+	// "default: primary" on a read is how an assistant's account ended up reading only its own,
+	// empty calendar. The reads cover every calendar now; only the writes still say primary.
+	for _, tool := range (&CalendarService{}).Tools() {
+		for name, prop := range tool.InputSchema.Properties {
+			saysPrimary := strings.Contains(prop.Description, "default: primary")
+			read := tool.Name == "list-events" || tool.Name == "search-events" || tool.Name == "get-freebusy"
+			if read && saysPrimary {
+				t.Errorf("%s.%s still says it defaults to primary: %q", tool.Name, name, prop.Description)
+			}
+		}
+	}
+}
+
+func TestCalendarRPCErrorSurfacesGoogleDetail(t *testing.T) {
+	rpcErr := rpcError("create event", errors.New("requiredAccessLevel"))
+	if !strings.Contains(rpcErr.Message, "requiredAccessLevel") {
+		t.Fatalf("error message hid API detail: %q", rpcErr.Message)
+	}
+}
+
 func TestCalendarServiceHandle_UnknownTool(t *testing.T) {
 	cs := &CalendarService{}
 	_, err := cs.Handle(nil, "nonexistent", nil)
@@ -101,8 +173,8 @@ func TestGmailServiceScopes(t *testing.T) {
 func TestGmailServiceTools(t *testing.T) {
 	gs := &GmailService{}
 	tools := gs.Tools()
-	if len(tools) != 5 {
-		t.Errorf("expected 5 tools, got %d", len(tools))
+	if len(tools) != 7 {
+		t.Errorf("expected 7 tools, got %d", len(tools))
 	}
 
 	names := make(map[string]bool)
@@ -110,8 +182,8 @@ func TestGmailServiceTools(t *testing.T) {
 		names[tool.Name] = true
 	}
 	for _, name := range []string{
-		"list-inbox", "get-email", "search-emails",
-		"send-email", "reply-to-email",
+		"list-inbox", "get-email", "get-thread", "search-emails",
+		"send-email", "reply-to-email", "download-attachment",
 	} {
 		if !names[name] {
 			t.Errorf("missing tool: %s", name)
@@ -209,8 +281,8 @@ func TestServiceToolsCount(t *testing.T) {
 	if calLen != 7 {
 		t.Errorf("Calendar: expected 7, got %d", calLen)
 	}
-	if gmailLen != 5 {
-		t.Errorf("Gmail: expected 5, got %d", gmailLen)
+	if gmailLen != 7 {
+		t.Errorf("Gmail: expected 7, got %d", gmailLen)
 	}
 	if tasksLen != 5 {
 		t.Errorf("Tasks: expected 5, got %d", tasksLen)
@@ -222,8 +294,8 @@ func TestServiceToolsCount(t *testing.T) {
 		t.Errorf("Contacts: expected 3, got %d", contactsLen)
 	}
 	total := calLen + gmailLen + tasksLen + driveLen + contactsLen
-	if total != 26 {
-		t.Errorf("Total tools: expected 26 (7+5+5+6+3), got %d", total)
+	if total != 28 {
+		t.Errorf("Total tools: expected 28 (7+7+5+6+3), got %d", total)
 	}
 }
 

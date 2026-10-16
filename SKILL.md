@@ -47,6 +47,7 @@ Arguments:
 - `description` — event description
 - `location` — event location
 - `calendarId` — target calendar (default: primary)
+- `colorId` — Google Calendar event color ID (for example `11` Tomato, `3` Grape)
 
 ### `update-event`
 Modify an existing event.
@@ -57,7 +58,7 @@ Examples:
 
 Arguments:
 - `eventId` (required) — event to modify
-- `summary`, `startTime`, `endTime` — fields to update
+- `summary`, `description`, `location`, `startTime`, `endTime`, `colorId` — fields to patch
 - `calendarId` — target calendar (default: primary)
 
 ### `delete-event`
@@ -80,10 +81,12 @@ Examples:
 
 Arguments:
 - `query` (required) — text to search
+- `calendarId` — calendar to search (default: primary)
 - `maxResults` — max results (default: 50)
 
 ### `list-calendars`
-List all available calendars.
+List all available calendars, including each calendar ID, access role, and color. Shared-calendar
+writes require `writer` or `owner` access.
 
 Examples:
 - "mostrame mis calendarios"
@@ -115,11 +118,12 @@ Arguments:
 - `query` — optional Gmail search filter
 
 ### `get-email`
-Read a full email by ID.
+Read a full email by ID. Any attachments are listed after the body with their filename, type, size and attachment ID.
 
 Examples:
 - "leé el primer email de la lista"
 - "mostrame el contenido completo del mail de belo"
+- "qué archivos tiene adjuntos ese mail?"
 
 Arguments:
 - `id` (required) — email message ID
@@ -164,6 +168,19 @@ Arguments:
 - `subject` (required) — reply subject
 - `body` — reply body text
 - `attachments` — array of files to attach. Each item can have `localPath` (local file) or `driveFileId` (Google Drive file ID)
+
+### `download-attachment`
+Save an attachment from a received email to disk. `get-email` lists each attachment's ID, filename, type and size — pass one of those IDs here.
+
+Examples:
+- "descargá el PDF adjunto del mail de Natalia"
+- "guardá el adjunto de ese email en /home/user/downloads"
+- "buscá mails con `has:attachment` de esta semana y bajá el Excel"
+
+Arguments:
+- `messageId` (required) — email message ID
+- `attachmentId` (required) — attachment ID from `get-email`
+- `savePath` — destination file, or a directory to save under the original filename (default: system temp directory)
 
 ## Tasks tools
 

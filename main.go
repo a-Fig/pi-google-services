@@ -19,6 +19,7 @@ import (
 	"github.com/sombi/pi-google-services/internal/calendar"
 	"github.com/sombi/pi-google-services/internal/config"
 	"github.com/sombi/pi-google-services/internal/contacts"
+	"github.com/sombi/pi-google-services/internal/dnsresolve"
 	"github.com/sombi/pi-google-services/internal/drive"
 	"github.com/sombi/pi-google-services/internal/gmail"
 	"github.com/sombi/pi-google-services/internal/mcp"
@@ -26,11 +27,19 @@ import (
 	"github.com/sombi/pi-google-services/internal/tasks"
 )
 
-const version = "0.1.19"
+const version = "0.1.20-afig.1"
 
 func main() {
 	log.SetFlags(0)
 	log.SetPrefix("pi-google: ")
+
+	// This binary is CGO_ENABLED=0, so Go's pure-Go DNS resolver is the only one available --
+	// and on Android that resolver's usual source of nameservers, /etc/resolv.conf, does not
+	// exist, so it falls back to 127.0.0.1:53/[::1]:53 where nothing listens (incident
+	// 2026-09-07: every "login" call failed at the token exchange with exactly that dial
+	// error). Install must run before anything below does a DNS lookup -- see
+	// internal/dnsresolve's package doc for the full story and the alternative rejected.
+	dnsresolve.Install()
 
 	if len(os.Args) < 2 {
 		printUsage()
@@ -39,7 +48,7 @@ func main() {
 
 	switch os.Args[1] {
 	case "login":
-		cmdLogin(wantsNoBrowser(os.Args))
+		cmdLogin(wantsNoBrowser(os.Args), redirectURL(os.Args))
 	case "logout":
 		cmdLogout()
 	case "setup":
@@ -64,7 +73,7 @@ func printUsage() {
 
 Usage:
   pi-google-services setup          First-time setup (login + configure)
-  pi-google-services login          Authenticate with Google
+  pi-google-services login [--no-browser] [--redirect-url https://host/oauth/google]  Authenticate with Google
   pi-google-services logout         Remove stored credentials
   pi-google-services update         Self-update binary to latest version
   pi-google-services serve          Start MCP server (stdio)
@@ -156,7 +165,27 @@ func wantsNoBrowser(args []string) bool {
 	return false
 }
 
-func cmdLogin(noBrowser bool) {
+// redirectURL is intentionally limited to login; setup keeps its installed-client flow.
+func redirectURL(args []string) string {
+	for i, arg := range args {
+		if arg == "--redirect-url" {
+			if i+1 >= len(args) || strings.HasPrefix(args[i+1], "--") {
+				log.Fatal("--redirect-url requires an HTTPS callback URL")
+			}
+			return args[i+1]
+		}
+		if strings.HasPrefix(arg, "--redirect-url=") {
+			value := strings.TrimPrefix(arg, "--redirect-url=")
+			if value == "" {
+				log.Fatal("--redirect-url requires an HTTPS callback URL")
+			}
+			return value
+		}
+	}
+	return ""
+}
+
+func cmdLogin(noBrowser bool, redirect string) {
 	credsData, err := getCredentialsJSON()
 	if err != nil {
 		fmt.Println("❌ No se encontraron credenciales.")
@@ -169,6 +198,13 @@ func cmdLogin(noBrowser bool) {
 		log.Fatalf("Credenciales inválidas: %v", err)
 	}
 
+	if redirect != "" {
+		var credentials config.Credentials
+		if err := json.Unmarshal(credsData, &credentials); err != nil || credentials.Web.ClientID == "" || credentials.Installed.ClientID != "" {
+			log.Fatal("--redirect-url requires web application credentials")
+		}
+	}
+
 	ctx := context.Background()
 
 	fmt.Println("\n🔐 Autorizando con Google...")
@@ -176,7 +212,7 @@ func cmdLogin(noBrowser bool) {
 		fmt.Println("   Modo manual (--no-browser): vas a pegar la URL de autorización.")
 	}
 	fmt.Printf("   Scopes solicitados: %d servicios\n", len(registeredServices()))
-	token, err := a.LoginWithOptions(ctx, auth.LoginOptions{NoBrowser: noBrowser})
+	token, err := a.LoginWithOptions(ctx, auth.LoginOptions{NoBrowser: noBrowser, RedirectURL: redirect})
 	if err != nil {
 		log.Fatalf("Login falló: %v", err)
 	}

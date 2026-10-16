@@ -97,7 +97,7 @@ func (s *ContactsService) handleSearchContacts(ctx context.Context, params json.
 
 	results, err := s.api.SearchContacts(ctx, args.Query, args.Limit)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to search contacts", Data: err.Error()}
+		return nil, rpcError("search contacts", err)
 	}
 
 	var b strings.Builder
@@ -122,7 +122,7 @@ func (s *ContactsService) handleGetContact(ctx context.Context, params json.RawM
 
 	c, err := s.api.GetContact(ctx, args.ResourceName)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to get contact", Data: err.Error()}
+		return nil, rpcError("get contact", err)
 	}
 
 	return contentResponse(contacts.FormatContacts([]*contacts.ContactSummary{c})), nil
@@ -143,7 +143,7 @@ func (s *ContactsService) handleCreateContact(ctx context.Context, params json.R
 
 	created, err := s.api.CreateContact(ctx, args.Name, args.Email, args.Phone)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to create contact", Data: err.Error()}
+		return nil, rpcError("create contact", err)
 	}
 
 	return contentResponse(fmt.Sprintf("✅ Contact created: %s%s%s\n   🔖 %s",

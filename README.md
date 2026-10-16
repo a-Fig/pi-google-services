@@ -48,24 +48,25 @@ After updating, restart your Pi session.
 | Tool | Description |
 |------|-------------|
 | `list-events` | List events in a date range |
-| `create-event` | Create event with attendees + Meet link |
-| `update-event` | Modify existing event |
+| `create-event` | Create event on any writable calendar, with event color, attendees, and Meet link |
+| `update-event` | Patch an existing event, including its color |
 | `delete-event` | Remove event |
 | `search-events` | Search by text |
 | `list-calendars` | Show all calendars |
 | `get-freebusy` | Check availability |
 
-### Gmail (5)
+### Gmail (6)
 
 | Tool | Description |
 |------|-------------|
 | `list-inbox` | Show recent emails |
-| `get-email` | Read full email by ID |
+| `get-email` | Read full email by ID (lists its attachments) |
 | `search-emails` | Search with Gmail syntax |
 | `send-email` | Send new email with optional file attachments |
 | `reply-to-email` | Reply to thread with optional file attachments |
+| `download-attachment` | Save an attachment from a received email to disk |
 
-### Email Attachments
+### Sending attachments
 
 Both `send-email` and `reply-to-email` accept an optional `attachments` array.
 Each attachment can reference a local file or a Google Drive file:
@@ -82,6 +83,36 @@ Each attachment can reference a local file or a Google Drive file:
 }
 ```
 
+### Receiving attachments
+
+`get-email` appends an attachment list to the message it returns — filename,
+MIME type, size, and the attachment ID needed to fetch the bytes:
+
+```
+📎 Attachments (2):
+1. report.pdf — application/pdf, 2.0 MB
+   id: ANGjdJ8x...
+2. logo.png — image/png, 12.4 KB (inline)
+   id: ANGjdJ9y...
+```
+
+Pass those IDs to `download-attachment` to write one to disk:
+
+```json
+{
+  "messageId": "18f2a1b3c4d5e6f7",
+  "attachmentId": "ANGjdJ8x...",
+  "savePath": "/home/user/downloads"
+}
+```
+
+`savePath` is optional. A directory saves under the attachment's own filename;
+a file path saves under that name; omitting it writes to the system temp
+directory. Sender-supplied filenames are reduced to a single path element, so
+an attachment can never be written outside the directory you choose. Use the
+Gmail query `has:attachment` with `search-emails` to find messages that carry
+files.
+
 ### Tasks (5)
 
 | Tool | Description |
@@ -91,6 +122,28 @@ Each attachment can reference a local file or a Google Drive file:
 | `create-task` | Create a new task |
 | `complete-task` | Mark task as done |
 | `delete-task` | Remove a task |
+
+### Calendar selection, permissions, and colors
+
+Pass `calendarId` to create, update, delete, search, or list events on a non-primary calendar.
+`list-calendars` reports each calendar's `Access` role so you can verify that shared calendars are
+writable (`writer` or `owner`) instead of discovering a read-only share through a failed write.
+Calendar API errors are returned with their underlying Google detail.
+
+Pass `colorId` to `create-event` or `update-event` to set the event color. Example:
+
+```json
+{
+  "summary": "Calc 1 Exam",
+  "startTime": "2026-08-30T13:00:00-07:00",
+  "endTime": "2026-08-30T15:00:00-07:00",
+  "calendarId": "school-calendar-id@group.calendar.google.com",
+  "colorId": "11"
+}
+```
+
+Event list/search results include the event ID, calendar ID, and color ID so follow-up updates and
+deletes can target the correct event.
 
 ### Meet
 
@@ -213,7 +266,7 @@ go build -o pi-google-services .
 go test ./... -v
 ```
 
-26 unit tests (MCP protocol, config, service metadata, services, MIME multipart attachments).
+63 unit tests (MCP protocol, config, service metadata, services, MIME multipart attachments, attachment extraction and save-path handling).
 
 ## License
 

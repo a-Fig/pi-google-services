@@ -106,7 +106,7 @@ func (s *TasksService) Handle(ctx context.Context, toolName string, params json.
 func (s *TasksService) handleListTaskLists(ctx context.Context) (interface{}, *mcp.RPCError) {
 	lists, err := s.api.ListTaskLists(ctx)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to list task lists", Data: err.Error()}
+		return nil, rpcError("list task lists", err)
 	}
 	var b strings.Builder
 	if len(lists) == 0 {
@@ -131,7 +131,7 @@ func (s *TasksService) handleListTasks(ctx context.Context, params json.RawMessa
 
 	items, err := s.api.ListTasks(ctx, args.TaskListID, args.Status, args.MaxResults)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to list tasks", Data: err.Error()}
+		return nil, rpcError("list tasks", err)
 	}
 
 	var b strings.Builder
@@ -176,7 +176,7 @@ func (s *TasksService) handleCreateTask(ctx context.Context, params json.RawMess
 
 	created, err := s.api.CreateTask(ctx, args.TaskListID, args.Title, args.Notes, args.DueDate)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to create task", Data: err.Error()}
+		return nil, rpcError("create task", err)
 	}
 
 	dueInfo := ""
@@ -200,7 +200,7 @@ func (s *TasksService) handleCompleteTask(ctx context.Context, params json.RawMe
 
 	updated, err := s.api.CompleteTask(ctx, args.TaskListID, args.TaskID)
 	if err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to complete task", Data: err.Error()}
+		return nil, rpcError("complete task", err)
 	}
 
 	return contentResponse(fmt.Sprintf("✅ Task completed: %s", updated.Title)), nil
@@ -219,7 +219,7 @@ func (s *TasksService) handleDeleteTask(ctx context.Context, params json.RawMess
 	}
 
 	if err := s.api.DeleteTask(ctx, args.TaskListID, args.TaskID); err != nil {
-		return nil, &mcp.RPCError{Code: -32603, Message: "Failed to delete task", Data: err.Error()}
+		return nil, rpcError("delete task", err)
 	}
 
 	return contentResponse(fmt.Sprintf("✅ Task deleted (ID: %s)", args.TaskID)), nil
