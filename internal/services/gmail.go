@@ -187,7 +187,7 @@ func (s *GmailService) handleListInbox(ctx context.Context, params json.RawMessa
 		}
 	}
 
-	return contentResponse(b.String()), nil
+	return emailListContent(b.String()), nil
 }
 
 // formatReplyResult renders the reply-to-email success message, including the
@@ -276,6 +276,9 @@ func (s *GmailService) handleGetEmail(ctx context.Context, params json.RawMessag
 		result += fmt.Sprintf("\nDMARC: %s", detail.Dmarc)
 	}
 	result += formatThreadLine(detail.ThreadID)
+	// Retain the legacy header/body layout. Older parsers still recover From/To,
+	// DMARC and Thread; newer parsers recognize this additional header as metadata.
+	result += "\nTrust: " + emailContentTrust
 	result += fmt.Sprintf("\n\n%s", body)
 	result += formatAttachments(detail.Attachments)
 
@@ -308,7 +311,7 @@ func (s *GmailService) handleSearchEmails(ctx context.Context, params json.RawMe
 		}
 	}
 
-	return contentResponse(b.String()), nil
+	return emailListContent(b.String()), nil
 }
 
 // formatSearchEntry renders one search-emails result line, including the
