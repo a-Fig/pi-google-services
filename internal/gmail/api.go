@@ -305,7 +305,7 @@ func retryDelay(err error, attempt int) time.Duration {
 
 // GetEmail retrieves the full content of a message by ID.
 func (s *Service) GetEmail(ctx context.Context, id string) (*EmailDetail, error) {
-	msg, err := s.svc.Messages.Get("me", id).Format("full").Do()
+	msg, err := s.svc.Messages.Get("me", id).Format("full").Context(ctx).Do()
 	if err != nil {
 		return nil, fmt.Errorf("get message: %w", err)
 	}

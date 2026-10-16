@@ -6,9 +6,11 @@ import (
 	"sort"
 )
 
-// GetThread returns Gmail's ordered full conversation from one API response.
-func (s *Service) GetThread(ctx context.Context, id string) ([]*EmailDetail, error) {
-	thread, err := s.svc.Threads.Get("me", id).Format("full").Context(ctx).Do()
+// GetThreadMessageIDs validates/order-pages a conversation without downloading any
+// bodies. The explicit projection also excludes snippets, headers and MIME payloads.
+func (s *Service) GetThreadMessageIDs(ctx context.Context, id string) ([]string, error) {
+	thread, err := s.svc.Threads.Get("me", id).Format("metadata").
+		Fields("id,messages(id,threadId,internalDate)").Context(ctx).Do()
 	if err != nil {
 		return nil, fmt.Errorf("get thread: %w", err)
 	}
@@ -18,9 +20,9 @@ func (s *Service) GetThread(ctx context.Context, id string) ([]*EmailDetail, err
 		}
 		return thread.Messages[i].InternalDate < thread.Messages[j].InternalDate
 	})
-	details := make([]*EmailDetail, 0, len(thread.Messages))
+	ids := make([]string, 0, len(thread.Messages))
 	for _, message := range thread.Messages {
-		details = append(details, detailFromMessage(message))
+		ids = append(ids, message.Id)
 	}
-	return details, nil
+	return ids, nil
 }

@@ -163,30 +163,32 @@ func (s *GmailService) handleGetThread(ctx context.Context, params json.RawMessa
 			return nil, &mcp.RPCError{Code: -32602, Message: "Invalid thread cursor"}
 		}
 	}
-	messages, err := s.api.GetThread(ctx, args.ThreadID)
+	ids, err := s.api.GetThreadMessageIDs(ctx, args.ThreadID)
 	if err != nil {
 		return nil, rpcError("get thread", err)
-	}
-	ids := make([]string, 0, len(messages))
-	for _, message := range messages {
-		ids = append(ids, message.ID)
 	}
 	encodedIDs, _ := json.Marshal(ids)
 	version := fmt.Sprintf("%x", sha256.Sum256(encodedIDs))
 	if args.Cursor != "" && cursor.Version != version {
 		return jsonContent(map[string]interface{}{"threadId": args.ThreadID, "messages": []*bodyPage{}, "threadChanged": true, "note": "Thread changed; read_email_thread again without cursor."}), nil
 	}
-	if cursor.Offset > len(messages) {
+	if cursor.Offset > len(ids) {
 		return nil, &mcp.RPCError{Code: -32602, Message: "Invalid thread cursor"}
 	}
-	end := cursor.Offset + min(5, len(messages)-cursor.Offset)
+	end := cursor.Offset + min(5, len(ids)-cursor.Offset)
 	pages := make([]*bodyPage, 0, end-cursor.Offset)
-	for _, detail := range messages[cursor.Offset:end] {
+	for _, id := range ids[cursor.Offset:end] {
+		// Hydrate sequentially, then retain only the body page. Other thread bodies
+		// are neither downloaded nor base64-decoded, including on continuation.
+		detail, err := s.api.GetEmail(ctx, id)
+		if err != nil {
+			return nil, rpcError("get thread", err)
+		}
 		page, _ := emailPage(detail, 0)
 		pages = append(pages, page)
 	}
-	result := map[string]interface{}{"threadId": args.ThreadID, "messages": pages, "totalMessages": len(messages)}
-	if end < len(messages) {
+	result := map[string]interface{}{"threadId": args.ThreadID, "messages": pages, "totalMessages": len(ids)}
+	if end < len(ids) {
 		next, _ := json.Marshal(threadCursor{ThreadID: args.ThreadID, Version: version, Offset: end})
 		result["nextCursor"] = base64.RawURLEncoding.EncodeToString(next)
 	}
