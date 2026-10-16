@@ -397,7 +397,8 @@ func TestLoginWebRedirect(t *testing.T) {
 			}))
 			defer ts.Close()
 			a.OAuthConfig.Endpoint.TokenURL = ts.URL
-			opts := LoginOptions{NoBrowser: true, Input: strings.NewReader("code\n"), Output: io.Discard}
+			var output strings.Builder
+			opts := LoginOptions{NoBrowser: true, Input: strings.NewReader("code\n"), Output: &output}
 			if web {
 				opts.RedirectURL = redirect
 			}
@@ -405,6 +406,9 @@ func TestLoginWebRedirect(t *testing.T) {
 				t.Fatal(err)
 			}
 			if web {
+				if !strings.Contains(output.String(), "access_type=offline") || !strings.Contains(output.String(), "prompt=consent") {
+					t.Fatal("web sign-in must request a lasting token")
+				}
 				if a.OAuthConfig.RedirectURL != redirect {
 					t.Fatal(a.OAuthConfig.RedirectURL)
 				}

@@ -225,7 +225,12 @@ func (a *Authenticator) LoginWithOptions(ctx context.Context, opts LoginOptions)
 		a.OAuthConfig.RedirectURL = cb.url
 	}
 
-	authURL := a.authCodeURL(pkce)
+	var authOptions []oauth2.AuthCodeOption
+	if opts.RedirectURL != "" {
+		// A portal handover must yield a refresh token, including on repeat sign-ins.
+		authOptions = []oauth2.AuthCodeOption{oauth2.AccessTypeOffline, oauth2.ApprovalForce}
+	}
+	authURL := a.authCodeURL(pkce, authOptions...)
 
 	var authCode string
 	switch {
@@ -271,11 +276,12 @@ func (a *Authenticator) LoginWithOptions(ctx context.Context, opts LoginOptions)
 }
 
 // authCodeURL builds the Google authorization URL with PKCE parameters.
-func (a *Authenticator) authCodeURL(pkce *PKCEParams) string {
-	return a.OAuthConfig.AuthCodeURL(pkce.CodeChallenge,
+func (a *Authenticator) authCodeURL(pkce *PKCEParams, options ...oauth2.AuthCodeOption) string {
+	options = append(options,
 		oauth2.SetAuthURLParam("code_challenge", pkce.CodeChallenge),
 		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
 	)
+	return a.OAuthConfig.AuthCodeURL(pkce.CodeChallenge, options...)
 }
 
 // exchange trades an authorization code for tokens using the PKCE verifier
