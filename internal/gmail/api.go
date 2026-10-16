@@ -103,8 +103,10 @@ type AttachmentInfo struct {
 }
 
 // New creates a Gmail Service from an OAuth2 token source.
-func New(ctx context.Context, ts oauth2.TokenSource) (*Service, error) {
-	svc, err := gmail.NewService(ctx, option.WithTokenSource(ts))
+func New(ctx context.Context, ts oauth2.TokenSource, options ...option.ClientOption) (*Service, error) {
+	// Explicit client options support an isolated fake endpoint in integration tests.
+	options = append([]option.ClientOption{option.WithTokenSource(ts)}, options...)
+	svc, err := gmail.NewService(ctx, options...)
 	if err != nil {
 		return nil, fmt.Errorf("create gmail service: %w", err)
 	}
@@ -308,6 +310,10 @@ func (s *Service) GetEmail(ctx context.Context, id string) (*EmailDetail, error)
 		return nil, fmt.Errorf("get message: %w", err)
 	}
 
+	return detailFromMessage(msg), nil
+}
+
+func detailFromMessage(msg *gmail.Message) *EmailDetail {
 	detail := &EmailDetail{
 		EmailSummary: EmailSummary{
 			ID:       msg.Id,
@@ -343,7 +349,7 @@ func (s *Service) GetEmail(ctx context.Context, id string) (*EmailDetail, error)
 	detail.HTML = html
 	detail.Attachments = extractAttachments(msg.Payload, 0)
 
-	return detail, nil
+	return detail
 }
 
 // GetAttachment downloads a single attachment from a received message. The

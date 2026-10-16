@@ -1,0 +1,584 @@
+{
+  "examples": [
+    {
+      "name": "HTML-only receipt with heavy CSS",
+      "id": "receipt"
+    },
+    {
+      "name": "Marketing newsletter",
+      "id": "newsletter"
+    },
+    {
+      "name": "HTML entities",
+      "id": "entities"
+    },
+    {
+      "name": "Long email",
+      "id": "long"
+    },
+    {
+      "name": "Long conversation (11 messages)",
+      "id": "m10"
+    }
+  ],
+  "messages": [
+    {
+      "id": "receipt",
+      "threadId": "t-receipt",
+      "internalDate": "1792074600000",
+      "snippet": "Alex&#39;s update &amp; details",
+      "payload": {
+        "mimeType": "text/html",
+        "headers": [
+          {
+            "name": "Subject",
+            "value": "Your Northstar receipt"
+          },
+          {
+            "name": "From",
+            "value": "Morgan <morgan@example.test>"
+          },
+          {
+            "name": "To",
+            "value": "Vi <vi@example.test>"
+          },
+          {
+            "name": "Date",
+            "value": "Thu, 15 Oct 2026 08:30:00 +0000"
+          },
+          {
+            "name": "Authentication-Results",
+            "value": "mx.example.test; dmarc=pass"
+          }
+        ],
+        "body": {
+          "data": "PGh0bWw-PGhlYWQ-PHRpdGxlPk5vcnRoc3RhciByZWNlaXB0PC90aXRsZT48c3R5bGU-LnJlY2VpcHQtcm93LTAgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy0xIHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctMiB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTMgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy00IHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctNSB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTYgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy03IHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctOCB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTkgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy0xMCB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTExIHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctMTIgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy0xMyB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTE0IHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctMTUgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy0xNiB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTE3IHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctMTggeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy0xOSB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTIwIHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctMjEgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy0yMiB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTIzIHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctMjQgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy0yNSB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTI2IHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctMjcgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy0yOCB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTI5IHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctMzAgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy0zMSB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTMyIHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctMzMgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy0zNCB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTM1IHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctMzYgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy0zNyB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTM4IHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctMzkgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy00MCB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTQxIHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctNDIgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy00MyB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTQ0IHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctNDUgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy00NiB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTQ3IHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctNDggeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy00OSB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTUwIHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctNTEgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy01MiB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTUzIHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctNTQgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy01NSB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTU2IHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctNTcgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy01OCB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTU5IHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctNjAgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy02MSB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTYyIHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctNjMgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy02NCB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTY1IHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctNjYgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy02NyB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTY4IHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctNjkgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy03MCB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTcxIHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctNzIgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy03MyB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTc0IHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctNzUgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy03NiB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTc3IHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctNzggeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy03OSB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTgwIHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctODEgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy04MiB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTgzIHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctODQgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy04NSB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTg2IHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctODcgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy04OCB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTg5IHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctOTAgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy05MSB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTkyIHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctOTMgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy05NCB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTk1IHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctOTYgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9Ci5yZWNlaXB0LXJvdy05NyB7IHBhZGRpbmc6IDEycHg7IGNvbG9yOiAjMzMzOyBmb250LWZhbWlseTogQXJpYWwsIHNhbnMtc2VyaWY7IH0KLnJlY2VpcHQtcm93LTk4IHsgcGFkZGluZzogMTJweDsgY29sb3I6ICMzMzM7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQoucmVjZWlwdC1yb3ctOTkgeyBwYWRkaW5nOiAxMnB4OyBjb2xvcjogIzMzMzsgZm9udC1mYW1pbHk6IEFyaWFsLCBzYW5zLXNlcmlmOyB9PC9zdHlsZT48L2hlYWQ-PGJvZHk-PGgxPlRoYW5rcyBmb3IgeW91ciBvcmRlciwgQWxleCE8L2gxPjxwPk9yZGVyIE5TLTEwNDgyICZtZGFzaDsgT2N0b2JlciAxNSwgMjAyNjwvcD48dGFibGU-PHRyPjx0ZD5UcmFpbCBtdWc8L3RkPjx0ZD4kMjQuMDA8L3RkPjwvdHI-PHRyPjx0ZD5TaGlwcGluZzwvdGQ-PHRkPiQ0LjUwPC90ZD48L3RyPjx0cj48dGQ-VG90YWw8L3RkPjx0ZD4kMjguNTA8L3RkPjwvdHI-PC90YWJsZT48cD5BcnJpdmVzIE9jdG9iZXIgMjAmbmRhc2g7MjIuPGJyPlNoaXAgdG86IDEyIEV4YW1wbGUgTGFuZSwgUG9ydGxhbmQsIE9SLjwvcD48cD5LZWVwIHRoaXMgcmVjZWlwdCBmb3IgcmV0dXJucyB3aXRoaW4gMzAgZGF5cy48L3A-PHNjcmlwdD50cmFja1B1cmNoYXNlKCJOUy0xMDQ4MiIpPC9zY3JpcHQ-PC9ib2R5PjwvaHRtbD4"
+        }
+      }
+    },
+    {
+      "id": "newsletter",
+      "threadId": "t-newsletter",
+      "internalDate": "1792074600000",
+      "snippet": "Alex&#39;s update &amp; details",
+      "payload": {
+        "mimeType": "text/html",
+        "headers": [
+          {
+            "name": "Subject",
+            "value": "Weekend member offers"
+          },
+          {
+            "name": "From",
+            "value": "Morgan <morgan@example.test>"
+          },
+          {
+            "name": "To",
+            "value": "Vi <vi@example.test>"
+          },
+          {
+            "name": "Date",
+            "value": "Thu, 15 Oct 2026 08:30:00 +0000"
+          },
+          {
+            "name": "Authentication-Results",
+            "value": "mx.example.test; dmarc=pass"
+          }
+        ],
+        "body": {
+          "data": "PGh0bWw-PGhlYWQ-PHN0eWxlPi5oZXJvIHtmb250LXNpemU6MzJweH0gLm9mZmVyIHtjb2xvcjojMDU4fTwvc3R5bGU-PC9oZWFkPjxib2R5PjxoMT5XZWVrZW5kIG91dGRvb3JzPC9oMT48cD5NZW1iZXIgb2ZmZXJzIGVuZCBTdW5kYXkgJm1kYXNoOyBzYXZlIDI1JSBvbiBkYXkgcGFja3MuPC9wPjxkaXY-PGgyPkNvYXN0YWwgZGF5IHBhY2s8L2gyPjxwPkxpZ2h0d2VpZ2h0IHN0b3JhZ2UgZm9yIHlvdXIgbmV4dCB3YWxrLiAkNTkgJnJhcnI7ICQ0NC4yNS48L3A-PC9kaXY-PGRpdj48aDI-Q2FtcCBraXRjaGVuPC9oMj48cD5CdWlsZCB5b3VyIGNhbXAga2l0IHdpdGggcmV1c2FibGUgZXNzZW50aWFscy48L3A-PC9kaXY-PGRpdj48aDI-RmllbGQgbm90ZXM8L2gyPjxwPlRocmVlIHNob3J0IGhpa2VzIHdpdGggcm9vbSB0byBicmVhdGhlLjwvcD48L2Rpdj48cD5GcmVlIHNoaXBwaW5nIG9uIG9yZGVycyBvdmVyICQ3NS48YnI-TWFuYWdlIHByZWZlcmVuY2VzIHwgVW5zdWJzY3JpYmU8L3A-PC9ib2R5PjwvaHRtbD4"
+        }
+      }
+    },
+    {
+      "id": "entities",
+      "threadId": "t-entities",
+      "internalDate": "1792074600000",
+      "snippet": "Alex&#39;s update &amp; details",
+      "payload": {
+        "mimeType": "text/html",
+        "headers": [
+          {
+            "name": "Subject",
+            "value": "Café & community"
+          },
+          {
+            "name": "From",
+            "value": "Morgan <morgan@example.test>"
+          },
+          {
+            "name": "To",
+            "value": "Vi <vi@example.test>"
+          },
+          {
+            "name": "Date",
+            "value": "Thu, 15 Oct 2026 08:30:00 +0000"
+          },
+          {
+            "name": "Authentication-Results",
+            "value": "mx.example.test; dmarc=pass"
+          }
+        ],
+        "body": {
+          "data": "PGgxPkNhZiZlYWN1dGU7ICZhbXA7IGNvbW11bml0eTwvaDE-PHA-QWxleCYjMzk7cyB0YWJsZSAmbWRhc2g7ICZsZHF1bzticmluZyBhIGZyaWVuZCZyZHF1bzsgJm5kYXNoOyA3Jm5ic3A7cG0uPC9wPjxwPiZsdDtkb29yIGNvZGUmZ3Q7OiAmI3gzMTsmI3gzMjsmI3gzMzsmI3gzNDsgJmJ1bGw7IGVudHJ5IGlzIGZyZWUgJmNvcHk7IDIwMjYuPC9wPjxwPkJ1ZGdldDogJmV1cm87NDUgJmxlOyAmcG91bmQ7NTAuIFNlZSB5b3UgdGhlcmUgJiMxMjg1Nzg7ITwvcD4"
+        }
+      }
+    },
+    {
+      "id": "long",
+      "threadId": "t-long",
+      "internalDate": "1792074600000",
+      "snippet": "Alex&#39;s update &amp; details",
+      "payload": {
+        "mimeType": "text/plain",
+        "headers": [
+          {
+            "name": "Subject",
+            "value": "Community garden handover"
+          },
+          {
+            "name": "From",
+            "value": "Morgan <morgan@example.test>"
+          },
+          {
+            "name": "To",
+            "value": "Vi <vi@example.test>"
+          },
+          {
+            "name": "Date",
+            "value": "Thu, 15 Oct 2026 08:30:00 +0000"
+          },
+          {
+            "name": "Authentication-Results",
+            "value": "mx.example.test; dmarc=pass"
+          }
+        ],
+        "body": {
+          "data": "UHJvamVjdCBoYW5kb3ZlciBmb3IgdGhlIGNvbW11bml0eSBnYXJkZW4KCjAxLiBUaGUgdG9vbCBzaGVkIGtleSBpcyB3aXRoIHRoZSB2b2x1bnRlZXIgY29vcmRpbmF0b3IuIFJldHVybiBpdCBhZnRlciB0aGUgc2hpZnQuCgowMi4gS2VlcCB0aGUgYWNjZXNzaWJsZSBwYXRoIGNsZWFyIGFuZCBsb2cgc3VwcGxpZXMgaW4gdGhlIHNoYXJlZCBub3RlYm9vay4KCjAzLiBDYWbDqSB2b2x1bnRlZXJzIHdpbGwgYnJpbmcgdGVhIGFuZCBmcnVpdC4gRXZlcnlvbmUgaXMgd2VsY29tZSDwn5mCLgoKMDQuIFRoZSBub3J0aCBiZWRzIG5lZWQgd2F0ZXJpbmcgb24gTW9uZGF5IGFuZCBUaHVyc2RheTsgY2hlY2sgdGhlIHNvaWwgZmlyc3QuCgowNS4gVGhlIHRvb2wgc2hlZCBrZXkgaXMgd2l0aCB0aGUgdm9sdW50ZWVyIGNvb3JkaW5hdG9yLiBSZXR1cm4gaXQgYWZ0ZXIgdGhlIHNoaWZ0LgoKMDYuIEtlZXAgdGhlIGFjY2Vzc2libGUgcGF0aCBjbGVhciBhbmQgbG9nIHN1cHBsaWVzIGluIHRoZSBzaGFyZWQgbm90ZWJvb2suCgowNy4gQ2Fmw6kgdm9sdW50ZWVycyB3aWxsIGJyaW5nIHRlYSBhbmQgZnJ1aXQuIEV2ZXJ5b25lIGlzIHdlbGNvbWUg8J-Zgi4KCjA4LiBUaGUgbm9ydGggYmVkcyBuZWVkIHdhdGVyaW5nIG9uIE1vbmRheSBhbmQgVGh1cnNkYXk7IGNoZWNrIHRoZSBzb2lsIGZpcnN0LgoKMDkuIFRoZSB0b29sIHNoZWQga2V5IGlzIHdpdGggdGhlIHZvbHVudGVlciBjb29yZGluYXRvci4gUmV0dXJuIGl0IGFmdGVyIHRoZSBzaGlmdC4KCjEwLiBLZWVwIHRoZSBhY2Nlc3NpYmxlIHBhdGggY2xlYXIgYW5kIGxvZyBzdXBwbGllcyBpbiB0aGUgc2hhcmVkIG5vdGVib29rLgoKMTEuIENhZsOpIHZvbHVudGVlcnMgd2lsbCBicmluZyB0ZWEgYW5kIGZydWl0LiBFdmVyeW9uZSBpcyB3ZWxjb21lIPCfmYIuCgoxMi4gVGhlIG5vcnRoIGJlZHMgbmVlZCB3YXRlcmluZyBvbiBNb25kYXkgYW5kIFRodXJzZGF5OyBjaGVjayB0aGUgc29pbCBmaXJzdC4KCjEzLiBUaGUgdG9vbCBzaGVkIGtleSBpcyB3aXRoIHRoZSB2b2x1bnRlZXIgY29vcmRpbmF0b3IuIFJldHVybiBpdCBhZnRlciB0aGUgc2hpZnQuCgoxNC4gS2VlcCB0aGUgYWNjZXNzaWJsZSBwYXRoIGNsZWFyIGFuZCBsb2cgc3VwcGxpZXMgaW4gdGhlIHNoYXJlZCBub3RlYm9vay4KCjE1LiBDYWbDqSB2b2x1bnRlZXJzIHdpbGwgYnJpbmcgdGVhIGFuZCBmcnVpdC4gRXZlcnlvbmUgaXMgd2VsY29tZSDwn5mCLgoKMTYuIFRoZSBub3J0aCBiZWRzIG5lZWQgd2F0ZXJpbmcgb24gTW9uZGF5IGFuZCBUaHVyc2RheTsgY2hlY2sgdGhlIHNvaWwgZmlyc3QuCgoxNy4gVGhlIHRvb2wgc2hlZCBrZXkgaXMgd2l0aCB0aGUgdm9sdW50ZWVyIGNvb3JkaW5hdG9yLiBSZXR1cm4gaXQgYWZ0ZXIgdGhlIHNoaWZ0LgoKMTguIEtlZXAgdGhlIGFjY2Vzc2libGUgcGF0aCBjbGVhciBhbmQgbG9nIHN1cHBsaWVzIGluIHRoZSBzaGFyZWQgbm90ZWJvb2suCgoxOS4gQ2Fmw6kgdm9sdW50ZWVycyB3aWxsIGJyaW5nIHRlYSBhbmQgZnJ1aXQuIEV2ZXJ5b25lIGlzIHdlbGNvbWUg8J-Zgi4KCjIwLiBUaGUgbm9ydGggYmVkcyBuZWVkIHdhdGVyaW5nIG9uIE1vbmRheSBhbmQgVGh1cnNkYXk7IGNoZWNrIHRoZSBzb2lsIGZpcnN0LgoKMjEuIFRoZSB0b29sIHNoZWQga2V5IGlzIHdpdGggdGhlIHZvbHVudGVlciBjb29yZGluYXRvci4gUmV0dXJuIGl0IGFmdGVyIHRoZSBzaGlmdC4KCjIyLiBLZWVwIHRoZSBhY2Nlc3NpYmxlIHBhdGggY2xlYXIgYW5kIGxvZyBzdXBwbGllcyBpbiB0aGUgc2hhcmVkIG5vdGVib29rLgoKMjMuIENhZsOpIHZvbHVudGVlcnMgd2lsbCBicmluZyB0ZWEgYW5kIGZydWl0LiBFdmVyeW9uZSBpcyB3ZWxjb21lIPCfmYIuCgoyNC4gVGhlIG5vcnRoIGJlZHMgbmVlZCB3YXRlcmluZyBvbiBNb25kYXkgYW5kIFRodXJzZGF5OyBjaGVjayB0aGUgc29pbCBmaXJzdC4KCjI1LiBUaGUgdG9vbCBzaGVkIGtleSBpcyB3aXRoIHRoZSB2b2x1bnRlZXIgY29vcmRpbmF0b3IuIFJldHVybiBpdCBhZnRlciB0aGUgc2hpZnQuCgoyNi4gS2VlcCB0aGUgYWNjZXNzaWJsZSBwYXRoIGNsZWFyIGFuZCBsb2cgc3VwcGxpZXMgaW4gdGhlIHNoYXJlZCBub3RlYm9vay4KCjI3LiBDYWbDqSB2b2x1bnRlZXJzIHdpbGwgYnJpbmcgdGVhIGFuZCBmcnVpdC4gRXZlcnlvbmUgaXMgd2VsY29tZSDwn5mCLgoKMjguIFRoZSBub3J0aCBiZWRzIG5lZWQgd2F0ZXJpbmcgb24gTW9uZGF5IGFuZCBUaHVyc2RheTsgY2hlY2sgdGhlIHNvaWwgZmlyc3QuCgoyOS4gVGhlIHRvb2wgc2hlZCBrZXkgaXMgd2l0aCB0aGUgdm9sdW50ZWVyIGNvb3JkaW5hdG9yLiBSZXR1cm4gaXQgYWZ0ZXIgdGhlIHNoaWZ0LgoKMzAuIEtlZXAgdGhlIGFjY2Vzc2libGUgcGF0aCBjbGVhciBhbmQgbG9nIHN1cHBsaWVzIGluIHRoZSBzaGFyZWQgbm90ZWJvb2suCgozMS4gQ2Fmw6kgdm9sdW50ZWVycyB3aWxsIGJyaW5nIHRlYSBhbmQgZnJ1aXQuIEV2ZXJ5b25lIGlzIHdlbGNvbWUg8J-Zgi4KCjMyLiBUaGUgbm9ydGggYmVkcyBuZWVkIHdhdGVyaW5nIG9uIE1vbmRheSBhbmQgVGh1cnNkYXk7IGNoZWNrIHRoZSBzb2lsIGZpcnN0LgoKMzMuIFRoZSB0b29sIHNoZWQga2V5IGlzIHdpdGggdGhlIHZvbHVudGVlciBjb29yZGluYXRvci4gUmV0dXJuIGl0IGFmdGVyIHRoZSBzaGlmdC4KCjM0LiBLZWVwIHRoZSBhY2Nlc3NpYmxlIHBhdGggY2xlYXIgYW5kIGxvZyBzdXBwbGllcyBpbiB0aGUgc2hhcmVkIG5vdGVib29rLgoKMzUuIENhZsOpIHZvbHVudGVlcnMgd2lsbCBicmluZyB0ZWEgYW5kIGZydWl0LiBFdmVyeW9uZSBpcyB3ZWxjb21lIPCfmYIuCgozNi4gVGhlIG5vcnRoIGJlZHMgbmVlZCB3YXRlcmluZyBvbiBNb25kYXkgYW5kIFRodXJzZGF5OyBjaGVjayB0aGUgc29pbCBmaXJzdC4KCjM3LiBUaGUgdG9vbCBzaGVkIGtleSBpcyB3aXRoIHRoZSB2b2x1bnRlZXIgY29vcmRpbmF0b3IuIFJldHVybiBpdCBhZnRlciB0aGUgc2hpZnQuCgozOC4gS2VlcCB0aGUgYWNjZXNzaWJsZSBwYXRoIGNsZWFyIGFuZCBsb2cgc3VwcGxpZXMgaW4gdGhlIHNoYXJlZCBub3RlYm9vay4KCjM5LiBDYWbDqSB2b2x1bnRlZXJzIHdpbGwgYnJpbmcgdGVhIGFuZCBmcnVpdC4gRXZlcnlvbmUgaXMgd2VsY29tZSDwn5mCLgoKNDAuIFRoZSBub3J0aCBiZWRzIG5lZWQgd2F0ZXJpbmcgb24gTW9uZGF5IGFuZCBUaHVyc2RheTsgY2hlY2sgdGhlIHNvaWwgZmlyc3QuCgo0MS4gVGhlIHRvb2wgc2hlZCBrZXkgaXMgd2l0aCB0aGUgdm9sdW50ZWVyIGNvb3JkaW5hdG9yLiBSZXR1cm4gaXQgYWZ0ZXIgdGhlIHNoaWZ0LgoKNDIuIEtlZXAgdGhlIGFjY2Vzc2libGUgcGF0aCBjbGVhciBhbmQgbG9nIHN1cHBsaWVzIGluIHRoZSBzaGFyZWQgbm90ZWJvb2suCgo0My4gQ2Fmw6kgdm9sdW50ZWVycyB3aWxsIGJyaW5nIHRlYSBhbmQgZnJ1aXQuIEV2ZXJ5b25lIGlzIHdlbGNvbWUg8J-Zgi4KCjQ0LiBUaGUgbm9ydGggYmVkcyBuZWVkIHdhdGVyaW5nIG9uIE1vbmRheSBhbmQgVGh1cnNkYXk7IGNoZWNrIHRoZSBzb2lsIGZpcnN0LgoKNDUuIFRoZSB0b29sIHNoZWQga2V5IGlzIHdpdGggdGhlIHZvbHVudGVlciBjb29yZGluYXRvci4gUmV0dXJuIGl0IGFmdGVyIHRoZSBzaGlmdC4KCjQ2LiBLZWVwIHRoZSBhY2Nlc3NpYmxlIHBhdGggY2xlYXIgYW5kIGxvZyBzdXBwbGllcyBpbiB0aGUgc2hhcmVkIG5vdGVib29rLgoKNDcuIENhZsOpIHZvbHVudGVlcnMgd2lsbCBicmluZyB0ZWEgYW5kIGZydWl0LiBFdmVyeW9uZSBpcyB3ZWxjb21lIPCfmYIuCgo0OC4gVGhlIG5vcnRoIGJlZHMgbmVlZCB3YXRlcmluZyBvbiBNb25kYXkgYW5kIFRodXJzZGF5OyBjaGVjayB0aGUgc29pbCBmaXJzdC4KCjQ5LiBUaGUgdG9vbCBzaGVkIGtleSBpcyB3aXRoIHRoZSB2b2x1bnRlZXIgY29vcmRpbmF0b3IuIFJldHVybiBpdCBhZnRlciB0aGUgc2hpZnQuCgo1MC4gS2VlcCB0aGUgYWNjZXNzaWJsZSBwYXRoIGNsZWFyIGFuZCBsb2cgc3VwcGxpZXMgaW4gdGhlIHNoYXJlZCBub3RlYm9vay4KCjUxLiBDYWbDqSB2b2x1bnRlZXJzIHdpbGwgYnJpbmcgdGVhIGFuZCBmcnVpdC4gRXZlcnlvbmUgaXMgd2VsY29tZSDwn5mCLgoKNTIuIFRoZSBub3J0aCBiZWRzIG5lZWQgd2F0ZXJpbmcgb24gTW9uZGF5IGFuZCBUaHVyc2RheTsgY2hlY2sgdGhlIHNvaWwgZmlyc3QuCgo1My4gVGhlIHRvb2wgc2hlZCBrZXkgaXMgd2l0aCB0aGUgdm9sdW50ZWVyIGNvb3JkaW5hdG9yLiBSZXR1cm4gaXQgYWZ0ZXIgdGhlIHNoaWZ0LgoKNTQuIEtlZXAgdGhlIGFjY2Vzc2libGUgcGF0aCBjbGVhciBhbmQgbG9nIHN1cHBsaWVzIGluIHRoZSBzaGFyZWQgbm90ZWJvb2suCgo1NS4gQ2Fmw6kgdm9sdW50ZWVycyB3aWxsIGJyaW5nIHRlYSBhbmQgZnJ1aXQuIEV2ZXJ5b25lIGlzIHdlbGNvbWUg8J-Zgi4KCjU2LiBUaGUgbm9ydGggYmVkcyBuZWVkIHdhdGVyaW5nIG9uIE1vbmRheSBhbmQgVGh1cnNkYXk7IGNoZWNrIHRoZSBzb2lsIGZpcnN0LgoKNTcuIFRoZSB0b29sIHNoZWQga2V5IGlzIHdpdGggdGhlIHZvbHVudGVlciBjb29yZGluYXRvci4gUmV0dXJuIGl0IGFmdGVyIHRoZSBzaGlmdC4KCjU4LiBLZWVwIHRoZSBhY2Nlc3NpYmxlIHBhdGggY2xlYXIgYW5kIGxvZyBzdXBwbGllcyBpbiB0aGUgc2hhcmVkIG5vdGVib29rLgoKNTkuIENhZsOpIHZvbHVudGVlcnMgd2lsbCBicmluZyB0ZWEgYW5kIGZydWl0LiBFdmVyeW9uZSBpcyB3ZWxjb21lIPCfmYIuCgo2MC4gVGhlIG5vcnRoIGJlZHMgbmVlZCB3YXRlcmluZyBvbiBNb25kYXkgYW5kIFRodXJzZGF5OyBjaGVjayB0aGUgc29pbCBmaXJzdC4KCjYxLiBUaGUgdG9vbCBzaGVkIGtleSBpcyB3aXRoIHRoZSB2b2x1bnRlZXIgY29vcmRpbmF0b3IuIFJldHVybiBpdCBhZnRlciB0aGUgc2hpZnQuCgo2Mi4gS2VlcCB0aGUgYWNjZXNzaWJsZSBwYXRoIGNsZWFyIGFuZCBsb2cgc3VwcGxpZXMgaW4gdGhlIHNoYXJlZCBub3RlYm9vay4KCjYzLiBDYWbDqSB2b2x1bnRlZXJzIHdpbGwgYnJpbmcgdGVhIGFuZCBmcnVpdC4gRXZlcnlvbmUgaXMgd2VsY29tZSDwn5mCLgoKNjQuIFRoZSBub3J0aCBiZWRzIG5lZWQgd2F0ZXJpbmcgb24gTW9uZGF5IGFuZCBUaHVyc2RheTsgY2hlY2sgdGhlIHNvaWwgZmlyc3QuCgo2NS4gVGhlIHRvb2wgc2hlZCBrZXkgaXMgd2l0aCB0aGUgdm9sdW50ZWVyIGNvb3JkaW5hdG9yLiBSZXR1cm4gaXQgYWZ0ZXIgdGhlIHNoaWZ0LgoKNjYuIEtlZXAgdGhlIGFjY2Vzc2libGUgcGF0aCBjbGVhciBhbmQgbG9nIHN1cHBsaWVzIGluIHRoZSBzaGFyZWQgbm90ZWJvb2suCgo2Ny4gQ2Fmw6kgdm9sdW50ZWVycyB3aWxsIGJyaW5nIHRlYSBhbmQgZnJ1aXQuIEV2ZXJ5b25lIGlzIHdlbGNvbWUg8J-Zgi4KCjY4LiBUaGUgbm9ydGggYmVkcyBuZWVkIHdhdGVyaW5nIG9uIE1vbmRheSBhbmQgVGh1cnNkYXk7IGNoZWNrIHRoZSBzb2lsIGZpcnN0LgoKNjkuIFRoZSB0b29sIHNoZWQga2V5IGlzIHdpdGggdGhlIHZvbHVudGVlciBjb29yZGluYXRvci4gUmV0dXJuIGl0IGFmdGVyIHRoZSBzaGlmdC4KCjcwLiBLZWVwIHRoZSBhY2Nlc3NpYmxlIHBhdGggY2xlYXIgYW5kIGxvZyBzdXBwbGllcyBpbiB0aGUgc2hhcmVkIG5vdGVib29rLgoKNzEuIENhZsOpIHZvbHVudGVlcnMgd2lsbCBicmluZyB0ZWEgYW5kIGZydWl0LiBFdmVyeW9uZSBpcyB3ZWxjb21lIPCfmYIuCgo3Mi4gVGhlIG5vcnRoIGJlZHMgbmVlZCB3YXRlcmluZyBvbiBNb25kYXkgYW5kIFRodXJzZGF5OyBjaGVjayB0aGUgc29pbCBmaXJzdC4KCjczLiBUaGUgdG9vbCBzaGVkIGtleSBpcyB3aXRoIHRoZSB2b2x1bnRlZXIgY29vcmRpbmF0b3IuIFJldHVybiBpdCBhZnRlciB0aGUgc2hpZnQuCgo3NC4gS2VlcCB0aGUgYWNjZXNzaWJsZSBwYXRoIGNsZWFyIGFuZCBsb2cgc3VwcGxpZXMgaW4gdGhlIHNoYXJlZCBub3RlYm9vay4KCjc1LiBDYWbDqSB2b2x1bnRlZXJzIHdpbGwgYnJpbmcgdGVhIGFuZCBmcnVpdC4gRXZlcnlvbmUgaXMgd2VsY29tZSDwn5mCLgoKNzYuIFRoZSBub3J0aCBiZWRzIG5lZWQgd2F0ZXJpbmcgb24gTW9uZGF5IGFuZCBUaHVyc2RheTsgY2hlY2sgdGhlIHNvaWwgZmlyc3QuCgo3Ny4gVGhlIHRvb2wgc2hlZCBrZXkgaXMgd2l0aCB0aGUgdm9sdW50ZWVyIGNvb3JkaW5hdG9yLiBSZXR1cm4gaXQgYWZ0ZXIgdGhlIHNoaWZ0LgoKNzguIEtlZXAgdGhlIGFjY2Vzc2libGUgcGF0aCBjbGVhciBhbmQgbG9nIHN1cHBsaWVzIGluIHRoZSBzaGFyZWQgbm90ZWJvb2suCgo3OS4gQ2Fmw6kgdm9sdW50ZWVycyB3aWxsIGJyaW5nIHRlYSBhbmQgZnJ1aXQuIEV2ZXJ5b25lIGlzIHdlbGNvbWUg8J-Zgi4KCjgwLiBUaGUgbm9ydGggYmVkcyBuZWVkIHdhdGVyaW5nIG9uIE1vbmRheSBhbmQgVGh1cnNkYXk7IGNoZWNrIHRoZSBzb2lsIGZpcnN0LgoKODEuIFRoZSB0b29sIHNoZWQga2V5IGlzIHdpdGggdGhlIHZvbHVudGVlciBjb29yZGluYXRvci4gUmV0dXJuIGl0IGFmdGVyIHRoZSBzaGlmdC4KCjgyLiBLZWVwIHRoZSBhY2Nlc3NpYmxlIHBhdGggY2xlYXIgYW5kIGxvZyBzdXBwbGllcyBpbiB0aGUgc2hhcmVkIG5vdGVib29rLgoKODMuIENhZsOpIHZvbHVudGVlcnMgd2lsbCBicmluZyB0ZWEgYW5kIGZydWl0LiBFdmVyeW9uZSBpcyB3ZWxjb21lIPCfmYIuCgo4NC4gVGhlIG5vcnRoIGJlZHMgbmVlZCB3YXRlcmluZyBvbiBNb25kYXkgYW5kIFRodXJzZGF5OyBjaGVjayB0aGUgc29pbCBmaXJzdC4KCjg1LiBUaGUgdG9vbCBzaGVkIGtleSBpcyB3aXRoIHRoZSB2b2x1bnRlZXIgY29vcmRpbmF0b3IuIFJldHVybiBpdCBhZnRlciB0aGUgc2hpZnQuCgo4Ni4gS2VlcCB0aGUgYWNjZXNzaWJsZSBwYXRoIGNsZWFyIGFuZCBsb2cgc3VwcGxpZXMgaW4gdGhlIHNoYXJlZCBub3RlYm9vay4KCjg3LiBDYWbDqSB2b2x1bnRlZXJzIHdpbGwgYnJpbmcgdGVhIGFuZCBmcnVpdC4gRXZlcnlvbmUgaXMgd2VsY29tZSDwn5mCLgoKODguIFRoZSBub3J0aCBiZWRzIG5lZWQgd2F0ZXJpbmcgb24gTW9uZGF5IGFuZCBUaHVyc2RheTsgY2hlY2sgdGhlIHNvaWwgZmlyc3QuCgo4OS4gVGhlIHRvb2wgc2hlZCBrZXkgaXMgd2l0aCB0aGUgdm9sdW50ZWVyIGNvb3JkaW5hdG9yLiBSZXR1cm4gaXQgYWZ0ZXIgdGhlIHNoaWZ0LgoKOTAuIEtlZXAgdGhlIGFjY2Vzc2libGUgcGF0aCBjbGVhciBhbmQgbG9nIHN1cHBsaWVzIGluIHRoZSBzaGFyZWQgbm90ZWJvb2suCgo5MS4gQ2Fmw6kgdm9sdW50ZWVycyB3aWxsIGJyaW5nIHRlYSBhbmQgZnJ1aXQuIEV2ZXJ5b25lIGlzIHdlbGNvbWUg8J-Zgi4KCjkyLiBUaGUgbm9ydGggYmVkcyBuZWVkIHdhdGVyaW5nIG9uIE1vbmRheSBhbmQgVGh1cnNkYXk7IGNoZWNrIHRoZSBzb2lsIGZpcnN0LgoKOTMuIFRoZSB0b29sIHNoZWQga2V5IGlzIHdpdGggdGhlIHZvbHVudGVlciBjb29yZGluYXRvci4gUmV0dXJuIGl0IGFmdGVyIHRoZSBzaGlmdC4KCjk0LiBLZWVwIHRoZSBhY2Nlc3NpYmxlIHBhdGggY2xlYXIgYW5kIGxvZyBzdXBwbGllcyBpbiB0aGUgc2hhcmVkIG5vdGVib29rLgoKOTUuIENhZsOpIHZvbHVudGVlcnMgd2lsbCBicmluZyB0ZWEgYW5kIGZydWl0LiBFdmVyeW9uZSBpcyB3ZWxjb21lIPCfmYIuCgo5Ni4gVGhlIG5vcnRoIGJlZHMgbmVlZCB3YXRlcmluZyBvbiBNb25kYXkgYW5kIFRodXJzZGF5OyBjaGVjayB0aGUgc29pbCBmaXJzdC4KCjk3LiBUaGUgdG9vbCBzaGVkIGtleSBpcyB3aXRoIHRoZSB2b2x1bnRlZXIgY29vcmRpbmF0b3IuIFJldHVybiBpdCBhZnRlciB0aGUgc2hpZnQuCgo5OC4gS2VlcCB0aGUgYWNjZXNzaWJsZSBwYXRoIGNsZWFyIGFuZCBsb2cgc3VwcGxpZXMgaW4gdGhlIHNoYXJlZCBub3RlYm9vay4KCjk5LiBDYWbDqSB2b2x1bnRlZXJzIHdpbGwgYnJpbmcgdGVhIGFuZCBmcnVpdC4gRXZlcnlvbmUgaXMgd2VsY29tZSDwn5mCLgoKMTAwLiBUaGUgbm9ydGggYmVkcyBuZWVkIHdhdGVyaW5nIG9uIE1vbmRheSBhbmQgVGh1cnNkYXk7IGNoZWNrIHRoZSBzb2lsIGZpcnN0LgoKMTAxLiBUaGUgdG9vbCBzaGVkIGtleSBpcyB3aXRoIHRoZSB2b2x1bnRlZXIgY29vcmRpbmF0b3IuIFJldHVybiBpdCBhZnRlciB0aGUgc2hpZnQuCgoxMDIuIEtlZXAgdGhlIGFjY2Vzc2libGUgcGF0aCBjbGVhciBhbmQgbG9nIHN1cHBsaWVzIGluIHRoZSBzaGFyZWQgbm90ZWJvb2suCgoxMDMuIENhZsOpIHZvbHVudGVlcnMgd2lsbCBicmluZyB0ZWEgYW5kIGZydWl0LiBFdmVyeW9uZSBpcyB3ZWxjb21lIPCfmYIuCgoxMDQuIFRoZSBub3J0aCBiZWRzIG5lZWQgd2F0ZXJpbmcgb24gTW9uZGF5IGFuZCBUaHVyc2RheTsgY2hlY2sgdGhlIHNvaWwgZmlyc3QuCgoxMDUuIFRoZSB0b29sIHNoZWQga2V5IGlzIHdpdGggdGhlIHZvbHVudGVlciBjb29yZGluYXRvci4gUmV0dXJuIGl0IGFmdGVyIHRoZSBzaGlmdC4KCjEwNi4gS2VlcCB0aGUgYWNjZXNzaWJsZSBwYXRoIGNsZWFyIGFuZCBsb2cgc3VwcGxpZXMgaW4gdGhlIHNoYXJlZCBub3RlYm9vay4KCjEwNy4gQ2Fmw6kgdm9sdW50ZWVycyB3aWxsIGJyaW5nIHRlYSBhbmQgZnJ1aXQuIEV2ZXJ5b25lIGlzIHdlbGNvbWUg8J-Zgi4KCjEwOC4gVGhlIG5vcnRoIGJlZHMgbmVlZCB3YXRlcmluZyBvbiBNb25kYXkgYW5kIFRodXJzZGF5OyBjaGVjayB0aGUgc29pbCBmaXJzdC4KCjEwOS4gVGhlIHRvb2wgc2hlZCBrZXkgaXMgd2l0aCB0aGUgdm9sdW50ZWVyIGNvb3JkaW5hdG9yLiBSZXR1cm4gaXQgYWZ0ZXIgdGhlIHNoaWZ0LgoKRmluYWwgYWN0aW9uOiBjb25maXJtIHRoZSBPY3RvYmVyIDMwIGhhbmRvdmVyIHdpdGggTW9yZ2FuLgo"
+        }
+      }
+    },
+    {
+      "id": "m00",
+      "threadId": "m00",
+      "internalDate": "1792074600000",
+      "snippet": "Planning update 1: The hall is booked for October 30.",
+      "payload": {
+        "mimeType": "text/plain",
+        "headers": [
+          {
+            "name": "Subject",
+            "value": "Re: Community night planning"
+          },
+          {
+            "name": "From",
+            "value": "Morgan <morgan@example.test>"
+          },
+          {
+            "name": "To",
+            "value": "Vi <vi@example.test>"
+          },
+          {
+            "name": "Date",
+            "value": "Thu, 15 Oct 2026 08:30:00 +0000"
+          },
+          {
+            "name": "Authentication-Results",
+            "value": "mx.example.test; dmarc=pass"
+          }
+        ],
+        "body": {
+          "data": "UGxhbm5pbmcgdXBkYXRlIDE6IFRoZSBoYWxsIGlzIGJvb2tlZCBmb3IgT2N0b2JlciAzMC4K"
+        }
+      }
+    },
+    {
+      "id": "m01",
+      "threadId": "m00",
+      "internalDate": "1792078200000",
+      "snippet": "Planning update 2: Catering can serve 40 people, including vegetarian meals.",
+      "payload": {
+        "mimeType": "text/plain",
+        "headers": [
+          {
+            "name": "Subject",
+            "value": "Re: Community night planning"
+          },
+          {
+            "name": "From",
+            "value": "Morgan <morgan@example.test>"
+          },
+          {
+            "name": "To",
+            "value": "Vi <vi@example.test>"
+          },
+          {
+            "name": "Date",
+            "value": "Thu, 15 Oct 2026 09:30:00 +0000"
+          },
+          {
+            "name": "Authentication-Results",
+            "value": "mx.example.test; dmarc=pass"
+          }
+        ],
+        "body": {
+          "data": "UGxhbm5pbmcgdXBkYXRlIDI6IENhdGVyaW5nIGNhbiBzZXJ2ZSA0MCBwZW9wbGUsIGluY2x1ZGluZyB2ZWdldGFyaWFuIG1lYWxzLgoKT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-IFBsYW5uaW5nIHVwZGF0ZSAxOiBUaGUgaGFsbCBpcyBib29rZWQgZm9yIE9jdG9iZXIgMzAuCg"
+        }
+      }
+    },
+    {
+      "id": "m02",
+      "threadId": "m00",
+      "internalDate": "1792081800000",
+      "snippet": "Planning update 3: Doors open at 6 pm; volunteers arrive at 5.",
+      "payload": {
+        "mimeType": "text/plain",
+        "headers": [
+          {
+            "name": "Subject",
+            "value": "Re: Community night planning"
+          },
+          {
+            "name": "From",
+            "value": "Morgan <morgan@example.test>"
+          },
+          {
+            "name": "To",
+            "value": "Vi <vi@example.test>"
+          },
+          {
+            "name": "Date",
+            "value": "Thu, 15 Oct 2026 10:30:00 +0000"
+          },
+          {
+            "name": "Authentication-Results",
+            "value": "mx.example.test; dmarc=pass"
+          }
+        ],
+        "body": {
+          "data": "UGxhbm5pbmcgdXBkYXRlIDM6IERvb3JzIG9wZW4gYXQgNiBwbTsgdm9sdW50ZWVycyBhcnJpdmUgYXQgNS4KCk9uIFRodSwgMTUgT2N0IDIwMjYgYXQgMDg6MzAsIE1vcmdhbiB3cm90ZToKPiBQbGFubmluZyB1cGRhdGUgMjogQ2F0ZXJpbmcgY2FuIHNlcnZlIDQwIHBlb3BsZSwgaW5jbHVkaW5nIHZlZ2V0YXJpYW4gbWVhbHMuCj4gCj4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gUGxhbm5pbmcgdXBkYXRlIDE6IFRoZSBoYWxsIGlzIGJvb2tlZCBmb3IgT2N0b2JlciAzMC4K"
+        }
+      }
+    },
+    {
+      "id": "m03",
+      "threadId": "m00",
+      "internalDate": "1792085400000",
+      "snippet": "Planning update 4: Please confirm the projector and two microphones.",
+      "payload": {
+        "mimeType": "text/plain",
+        "headers": [
+          {
+            "name": "Subject",
+            "value": "Re: Community night planning"
+          },
+          {
+            "name": "From",
+            "value": "Morgan <morgan@example.test>"
+          },
+          {
+            "name": "To",
+            "value": "Vi <vi@example.test>"
+          },
+          {
+            "name": "Date",
+            "value": "Thu, 15 Oct 2026 11:30:00 +0000"
+          },
+          {
+            "name": "Authentication-Results",
+            "value": "mx.example.test; dmarc=pass"
+          }
+        ],
+        "body": {
+          "data": "UGxhbm5pbmcgdXBkYXRlIDQ6IFBsZWFzZSBjb25maXJtIHRoZSBwcm9qZWN0b3IgYW5kIHR3byBtaWNyb3Bob25lcy4KCk9uIFRodSwgMTUgT2N0IDIwMjYgYXQgMDg6MzAsIE1vcmdhbiB3cm90ZToKPiBQbGFubmluZyB1cGRhdGUgMzogRG9vcnMgb3BlbiBhdCA2IHBtOyB2b2x1bnRlZXJzIGFycml2ZSBhdCA1Lgo-IAo-IE9uIFRodSwgMTUgT2N0IDIwMjYgYXQgMDg6MzAsIE1vcmdhbiB3cm90ZToKPiA-IFBsYW5uaW5nIHVwZGF0ZSAyOiBDYXRlcmluZyBjYW4gc2VydmUgNDAgcGVvcGxlLCBpbmNsdWRpbmcgdmVnZXRhcmlhbiBtZWFscy4KPiA-IAo-ID4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gPiBQbGFubmluZyB1cGRhdGUgMTogVGhlIGhhbGwgaXMgYm9va2VkIGZvciBPY3RvYmVyIDMwLgo"
+        }
+      }
+    },
+    {
+      "id": "m04",
+      "threadId": "m00",
+      "internalDate": "1792089000000",
+      "snippet": "Planning update 5: The hall is booked for October 30.",
+      "payload": {
+        "mimeType": "text/plain",
+        "headers": [
+          {
+            "name": "Subject",
+            "value": "Re: Community night planning"
+          },
+          {
+            "name": "From",
+            "value": "Morgan <morgan@example.test>"
+          },
+          {
+            "name": "To",
+            "value": "Vi <vi@example.test>"
+          },
+          {
+            "name": "Date",
+            "value": "Thu, 15 Oct 2026 12:30:00 +0000"
+          },
+          {
+            "name": "Authentication-Results",
+            "value": "mx.example.test; dmarc=pass"
+          }
+        ],
+        "body": {
+          "data": "UGxhbm5pbmcgdXBkYXRlIDU6IFRoZSBoYWxsIGlzIGJvb2tlZCBmb3IgT2N0b2JlciAzMC4KCk9uIFRodSwgMTUgT2N0IDIwMjYgYXQgMDg6MzAsIE1vcmdhbiB3cm90ZToKPiBQbGFubmluZyB1cGRhdGUgNDogUGxlYXNlIGNvbmZpcm0gdGhlIHByb2plY3RvciBhbmQgdHdvIG1pY3JvcGhvbmVzLgo-IAo-IE9uIFRodSwgMTUgT2N0IDIwMjYgYXQgMDg6MzAsIE1vcmdhbiB3cm90ZToKPiA-IFBsYW5uaW5nIHVwZGF0ZSAzOiBEb29ycyBvcGVuIGF0IDYgcG07IHZvbHVudGVlcnMgYXJyaXZlIGF0IDUuCj4gPiAKPiA-IE9uIFRodSwgMTUgT2N0IDIwMjYgYXQgMDg6MzAsIE1vcmdhbiB3cm90ZToKPiA-ID4gUGxhbm5pbmcgdXBkYXRlIDI6IENhdGVyaW5nIGNhbiBzZXJ2ZSA0MCBwZW9wbGUsIGluY2x1ZGluZyB2ZWdldGFyaWFuIG1lYWxzLgo-ID4gPiAKPiA-ID4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gPiA-IFBsYW5uaW5nIHVwZGF0ZSAxOiBUaGUgaGFsbCBpcyBib29rZWQgZm9yIE9jdG9iZXIgMzAuCg"
+        }
+      }
+    },
+    {
+      "id": "m05",
+      "threadId": "m00",
+      "internalDate": "1792092600000",
+      "snippet": "Planning update 6: Catering can serve 40 people, including vegetarian meals.",
+      "payload": {
+        "mimeType": "text/plain",
+        "headers": [
+          {
+            "name": "Subject",
+            "value": "Re: Community night planning"
+          },
+          {
+            "name": "From",
+            "value": "Morgan <morgan@example.test>"
+          },
+          {
+            "name": "To",
+            "value": "Vi <vi@example.test>"
+          },
+          {
+            "name": "Date",
+            "value": "Thu, 15 Oct 2026 13:30:00 +0000"
+          },
+          {
+            "name": "Authentication-Results",
+            "value": "mx.example.test; dmarc=pass"
+          }
+        ],
+        "body": {
+          "data": "UGxhbm5pbmcgdXBkYXRlIDY6IENhdGVyaW5nIGNhbiBzZXJ2ZSA0MCBwZW9wbGUsIGluY2x1ZGluZyB2ZWdldGFyaWFuIG1lYWxzLgoKT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-IFBsYW5uaW5nIHVwZGF0ZSA1OiBUaGUgaGFsbCBpcyBib29rZWQgZm9yIE9jdG9iZXIgMzAuCj4gCj4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gUGxhbm5pbmcgdXBkYXRlIDQ6IFBsZWFzZSBjb25maXJtIHRoZSBwcm9qZWN0b3IgYW5kIHR3byBtaWNyb3Bob25lcy4KPiA-IAo-ID4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gPiBQbGFubmluZyB1cGRhdGUgMzogRG9vcnMgb3BlbiBhdCA2IHBtOyB2b2x1bnRlZXJzIGFycml2ZSBhdCA1Lgo-ID4gPiAKPiA-ID4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gPiA-IFBsYW5uaW5nIHVwZGF0ZSAyOiBDYXRlcmluZyBjYW4gc2VydmUgNDAgcGVvcGxlLCBpbmNsdWRpbmcgdmVnZXRhcmlhbiBtZWFscy4KPiA-ID4gPiAKPiA-ID4gPiBPbiBUaHUsIDE1IE9jdCAyMDI2IGF0IDA4OjMwLCBNb3JnYW4gd3JvdGU6Cj4gPiA-ID4gPiBQbGFubmluZyB1cGRhdGUgMTogVGhlIGhhbGwgaXMgYm9va2VkIGZvciBPY3RvYmVyIDMwLgo"
+        }
+      }
+    },
+    {
+      "id": "m06",
+      "threadId": "m00",
+      "internalDate": "1792096200000",
+      "snippet": "Planning update 7: Doors open at 6 pm; volunteers arrive at 5.",
+      "payload": {
+        "mimeType": "text/plain",
+        "headers": [
+          {
+            "name": "Subject",
+            "value": "Re: Community night planning"
+          },
+          {
+            "name": "From",
+            "value": "Morgan <morgan@example.test>"
+          },
+          {
+            "name": "To",
+            "value": "Vi <vi@example.test>"
+          },
+          {
+            "name": "Date",
+            "value": "Thu, 15 Oct 2026 14:30:00 +0000"
+          },
+          {
+            "name": "Authentication-Results",
+            "value": "mx.example.test; dmarc=pass"
+          }
+        ],
+        "body": {
+          "data": "UGxhbm5pbmcgdXBkYXRlIDc6IERvb3JzIG9wZW4gYXQgNiBwbTsgdm9sdW50ZWVycyBhcnJpdmUgYXQgNS4KCk9uIFRodSwgMTUgT2N0IDIwMjYgYXQgMDg6MzAsIE1vcmdhbiB3cm90ZToKPiBQbGFubmluZyB1cGRhdGUgNjogQ2F0ZXJpbmcgY2FuIHNlcnZlIDQwIHBlb3BsZSwgaW5jbHVkaW5nIHZlZ2V0YXJpYW4gbWVhbHMuCj4gCj4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gUGxhbm5pbmcgdXBkYXRlIDU6IFRoZSBoYWxsIGlzIGJvb2tlZCBmb3IgT2N0b2JlciAzMC4KPiA-IAo-ID4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gPiBQbGFubmluZyB1cGRhdGUgNDogUGxlYXNlIGNvbmZpcm0gdGhlIHByb2plY3RvciBhbmQgdHdvIG1pY3JvcGhvbmVzLgo-ID4gPiAKPiA-ID4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gPiA-IFBsYW5uaW5nIHVwZGF0ZSAzOiBEb29ycyBvcGVuIGF0IDYgcG07IHZvbHVudGVlcnMgYXJyaXZlIGF0IDUuCj4gPiA-ID4gCj4gPiA-ID4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gPiA-ID4gUGxhbm5pbmcgdXBkYXRlIDI6IENhdGVyaW5nIGNhbiBzZXJ2ZSA0MCBwZW9wbGUsIGluY2x1ZGluZyB2ZWdldGFyaWFuIG1lYWxzLgo-ID4gPiA-ID4gCj4gPiA-ID4gPiBPbiBUaHUsIDE1IE9jdCAyMDI2IGF0IDA4OjMwLCBNb3JnYW4gd3JvdGU6Cj4gPiA-ID4gPiA-IFBsYW5uaW5nIHVwZGF0ZSAxOiBUaGUgaGFsbCBpcyBib29rZWQgZm9yIE9jdG9iZXIgMzAuCg"
+        }
+      }
+    },
+    {
+      "id": "m07",
+      "threadId": "m00",
+      "internalDate": "1792099800000",
+      "snippet": "Planning update 8: Please confirm the projector and two microphones.",
+      "payload": {
+        "mimeType": "text/plain",
+        "headers": [
+          {
+            "name": "Subject",
+            "value": "Re: Community night planning"
+          },
+          {
+            "name": "From",
+            "value": "Morgan <morgan@example.test>"
+          },
+          {
+            "name": "To",
+            "value": "Vi <vi@example.test>"
+          },
+          {
+            "name": "Date",
+            "value": "Thu, 15 Oct 2026 15:30:00 +0000"
+          },
+          {
+            "name": "Authentication-Results",
+            "value": "mx.example.test; dmarc=pass"
+          }
+        ],
+        "body": {
+          "data": "UGxhbm5pbmcgdXBkYXRlIDg6IFBsZWFzZSBjb25maXJtIHRoZSBwcm9qZWN0b3IgYW5kIHR3byBtaWNyb3Bob25lcy4KCk9uIFRodSwgMTUgT2N0IDIwMjYgYXQgMDg6MzAsIE1vcmdhbiB3cm90ZToKPiBQbGFubmluZyB1cGRhdGUgNzogRG9vcnMgb3BlbiBhdCA2IHBtOyB2b2x1bnRlZXJzIGFycml2ZSBhdCA1Lgo-IAo-IE9uIFRodSwgMTUgT2N0IDIwMjYgYXQgMDg6MzAsIE1vcmdhbiB3cm90ZToKPiA-IFBsYW5uaW5nIHVwZGF0ZSA2OiBDYXRlcmluZyBjYW4gc2VydmUgNDAgcGVvcGxlLCBpbmNsdWRpbmcgdmVnZXRhcmlhbiBtZWFscy4KPiA-IAo-ID4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gPiBQbGFubmluZyB1cGRhdGUgNTogVGhlIGhhbGwgaXMgYm9va2VkIGZvciBPY3RvYmVyIDMwLgo-ID4gPiAKPiA-ID4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gPiA-IFBsYW5uaW5nIHVwZGF0ZSA0OiBQbGVhc2UgY29uZmlybSB0aGUgcHJvamVjdG9yIGFuZCB0d28gbWljcm9waG9uZXMuCj4gPiA-ID4gCj4gPiA-ID4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gPiA-ID4gUGxhbm5pbmcgdXBkYXRlIDM6IERvb3JzIG9wZW4gYXQgNiBwbTsgdm9sdW50ZWVycyBhcnJpdmUgYXQgNS4KPiA-ID4gPiA-IAo-ID4gPiA-ID4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gPiA-ID4gPiBQbGFubmluZyB1cGRhdGUgMjogQ2F0ZXJpbmcgY2FuIHNlcnZlIDQwIHBlb3BsZSwgaW5jbHVkaW5nIHZlZ2V0YXJpYW4gbWVhbHMuCj4gPiA-ID4gPiA-IAo-ID4gPiA-ID4gPiBPbiBUaHUsIDE1IE9jdCAyMDI2IGF0IDA4OjMwLCBNb3JnYW4gd3JvdGU6Cj4gPiA-ID4gPiA-ID4gUGxhbm5pbmcgdXBkYXRlIDE6IFRoZSBoYWxsIGlzIGJvb2tlZCBmb3IgT2N0b2JlciAzMC4K"
+        }
+      }
+    },
+    {
+      "id": "m08",
+      "threadId": "m00",
+      "internalDate": "1792103400000",
+      "snippet": "Planning update 9: The hall is booked for October 30.",
+      "payload": {
+        "mimeType": "text/plain",
+        "headers": [
+          {
+            "name": "Subject",
+            "value": "Re: Community night planning"
+          },
+          {
+            "name": "From",
+            "value": "Morgan <morgan@example.test>"
+          },
+          {
+            "name": "To",
+            "value": "Vi <vi@example.test>"
+          },
+          {
+            "name": "Date",
+            "value": "Thu, 15 Oct 2026 16:30:00 +0000"
+          },
+          {
+            "name": "Authentication-Results",
+            "value": "mx.example.test; dmarc=pass"
+          }
+        ],
+        "body": {
+          "data": "UGxhbm5pbmcgdXBkYXRlIDk6IFRoZSBoYWxsIGlzIGJvb2tlZCBmb3IgT2N0b2JlciAzMC4KCk9uIFRodSwgMTUgT2N0IDIwMjYgYXQgMDg6MzAsIE1vcmdhbiB3cm90ZToKPiBQbGFubmluZyB1cGRhdGUgODogUGxlYXNlIGNvbmZpcm0gdGhlIHByb2plY3RvciBhbmQgdHdvIG1pY3JvcGhvbmVzLgo-IAo-IE9uIFRodSwgMTUgT2N0IDIwMjYgYXQgMDg6MzAsIE1vcmdhbiB3cm90ZToKPiA-IFBsYW5uaW5nIHVwZGF0ZSA3OiBEb29ycyBvcGVuIGF0IDYgcG07IHZvbHVudGVlcnMgYXJyaXZlIGF0IDUuCj4gPiAKPiA-IE9uIFRodSwgMTUgT2N0IDIwMjYgYXQgMDg6MzAsIE1vcmdhbiB3cm90ZToKPiA-ID4gUGxhbm5pbmcgdXBkYXRlIDY6IENhdGVyaW5nIGNhbiBzZXJ2ZSA0MCBwZW9wbGUsIGluY2x1ZGluZyB2ZWdldGFyaWFuIG1lYWxzLgo-ID4gPiAKPiA-ID4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gPiA-IFBsYW5uaW5nIHVwZGF0ZSA1OiBUaGUgaGFsbCBpcyBib29rZWQgZm9yIE9jdG9iZXIgMzAuCj4gPiA-ID4gCj4gPiA-ID4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gPiA-ID4gUGxhbm5pbmcgdXBkYXRlIDQ6IFBsZWFzZSBjb25maXJtIHRoZSBwcm9qZWN0b3IgYW5kIHR3byBtaWNyb3Bob25lcy4KPiA-ID4gPiA-IAo-ID4gPiA-ID4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gPiA-ID4gPiBQbGFubmluZyB1cGRhdGUgMzogRG9vcnMgb3BlbiBhdCA2IHBtOyB2b2x1bnRlZXJzIGFycml2ZSBhdCA1Lgo-ID4gPiA-ID4gPiAKPiA-ID4gPiA-ID4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gPiA-ID4gPiA-IFBsYW5uaW5nIHVwZGF0ZSAyOiBDYXRlcmluZyBjYW4gc2VydmUgNDAgcGVvcGxlLCBpbmNsdWRpbmcgdmVnZXRhcmlhbiBtZWFscy4KPiA-ID4gPiA-ID4gPiAKPiA-ID4gPiA-ID4gPiBPbiBUaHUsIDE1IE9jdCAyMDI2IGF0IDA4OjMwLCBNb3JnYW4gd3JvdGU6Cj4gPiA-ID4gPiA-ID4gPiBQbGFubmluZyB1cGRhdGUgMTogVGhlIGhhbGwgaXMgYm9va2VkIGZvciBPY3RvYmVyIDMwLgo"
+        }
+      }
+    },
+    {
+      "id": "m09",
+      "threadId": "m00",
+      "internalDate": "1792107000000",
+      "snippet": "Planning update 10: Catering can serve 40 people, including vegetarian meals.",
+      "payload": {
+        "mimeType": "text/plain",
+        "headers": [
+          {
+            "name": "Subject",
+            "value": "Re: Community night planning"
+          },
+          {
+            "name": "From",
+            "value": "Morgan <morgan@example.test>"
+          },
+          {
+            "name": "To",
+            "value": "Vi <vi@example.test>"
+          },
+          {
+            "name": "Date",
+            "value": "Thu, 15 Oct 2026 17:30:00 +0000"
+          },
+          {
+            "name": "Authentication-Results",
+            "value": "mx.example.test; dmarc=pass"
+          }
+        ],
+        "body": {
+          "data": "UGxhbm5pbmcgdXBkYXRlIDEwOiBDYXRlcmluZyBjYW4gc2VydmUgNDAgcGVvcGxlLCBpbmNsdWRpbmcgdmVnZXRhcmlhbiBtZWFscy4KCk9uIFRodSwgMTUgT2N0IDIwMjYgYXQgMDg6MzAsIE1vcmdhbiB3cm90ZToKPiBQbGFubmluZyB1cGRhdGUgOTogVGhlIGhhbGwgaXMgYm9va2VkIGZvciBPY3RvYmVyIDMwLgo-IAo-IE9uIFRodSwgMTUgT2N0IDIwMjYgYXQgMDg6MzAsIE1vcmdhbiB3cm90ZToKPiA-IFBsYW5uaW5nIHVwZGF0ZSA4OiBQbGVhc2UgY29uZmlybSB0aGUgcHJvamVjdG9yIGFuZCB0d28gbWljcm9waG9uZXMuCj4gPiAKPiA-IE9uIFRodSwgMTUgT2N0IDIwMjYgYXQgMDg6MzAsIE1vcmdhbiB3cm90ZToKPiA-ID4gUGxhbm5pbmcgdXBkYXRlIDc6IERvb3JzIG9wZW4gYXQgNiBwbTsgdm9sdW50ZWVycyBhcnJpdmUgYXQgNS4KPiA-ID4gCj4gPiA-IE9uIFRodSwgMTUgT2N0IDIwMjYgYXQgMDg6MzAsIE1vcmdhbiB3cm90ZToKPiA-ID4gPiBQbGFubmluZyB1cGRhdGUgNjogQ2F0ZXJpbmcgY2FuIHNlcnZlIDQwIHBlb3BsZSwgaW5jbHVkaW5nIHZlZ2V0YXJpYW4gbWVhbHMuCj4gPiA-ID4gCj4gPiA-ID4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gPiA-ID4gUGxhbm5pbmcgdXBkYXRlIDU6IFRoZSBoYWxsIGlzIGJvb2tlZCBmb3IgT2N0b2JlciAzMC4KPiA-ID4gPiA-IAo-ID4gPiA-ID4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gPiA-ID4gPiBQbGFubmluZyB1cGRhdGUgNDogUGxlYXNlIGNvbmZpcm0gdGhlIHByb2plY3RvciBhbmQgdHdvIG1pY3JvcGhvbmVzLgo-ID4gPiA-ID4gPiAKPiA-ID4gPiA-ID4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gPiA-ID4gPiA-IFBsYW5uaW5nIHVwZGF0ZSAzOiBEb29ycyBvcGVuIGF0IDYgcG07IHZvbHVudGVlcnMgYXJyaXZlIGF0IDUuCj4gPiA-ID4gPiA-ID4gCj4gPiA-ID4gPiA-ID4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gPiA-ID4gPiA-ID4gUGxhbm5pbmcgdXBkYXRlIDI6IENhdGVyaW5nIGNhbiBzZXJ2ZSA0MCBwZW9wbGUsIGluY2x1ZGluZyB2ZWdldGFyaWFuIG1lYWxzLgo-ID4gPiA-ID4gPiA-ID4gCj4gPiA-ID4gPiA-ID4gPiBPbiBUaHUsIDE1IE9jdCAyMDI2IGF0IDA4OjMwLCBNb3JnYW4gd3JvdGU6Cj4gPiA-ID4gPiA-ID4gPiA-IFBsYW5uaW5nIHVwZGF0ZSAxOiBUaGUgaGFsbCBpcyBib29rZWQgZm9yIE9jdG9iZXIgMzAuCg"
+        }
+      }
+    },
+    {
+      "id": "m10",
+      "threadId": "m00",
+      "internalDate": "1792110600000",
+      "snippet": "Planning update 11: Doors open at 6 pm; volunteers arrive at 5.",
+      "payload": {
+        "mimeType": "text/plain",
+        "headers": [
+          {
+            "name": "Subject",
+            "value": "Re: Community night planning"
+          },
+          {
+            "name": "From",
+            "value": "Morgan <morgan@example.test>"
+          },
+          {
+            "name": "To",
+            "value": "Vi <vi@example.test>"
+          },
+          {
+            "name": "Date",
+            "value": "Thu, 15 Oct 2026 18:30:00 +0000"
+          },
+          {
+            "name": "Authentication-Results",
+            "value": "mx.example.test; dmarc=pass"
+          }
+        ],
+        "body": {
+          "data": "UGxhbm5pbmcgdXBkYXRlIDExOiBEb29ycyBvcGVuIGF0IDYgcG07IHZvbHVudGVlcnMgYXJyaXZlIGF0IDUuCgpPbiBUaHUsIDE1IE9jdCAyMDI2IGF0IDA4OjMwLCBNb3JnYW4gd3JvdGU6Cj4gUGxhbm5pbmcgdXBkYXRlIDEwOiBDYXRlcmluZyBjYW4gc2VydmUgNDAgcGVvcGxlLCBpbmNsdWRpbmcgdmVnZXRhcmlhbiBtZWFscy4KPiAKPiBPbiBUaHUsIDE1IE9jdCAyMDI2IGF0IDA4OjMwLCBNb3JnYW4gd3JvdGU6Cj4gPiBQbGFubmluZyB1cGRhdGUgOTogVGhlIGhhbGwgaXMgYm9va2VkIGZvciBPY3RvYmVyIDMwLgo-ID4gCj4gPiBPbiBUaHUsIDE1IE9jdCAyMDI2IGF0IDA4OjMwLCBNb3JnYW4gd3JvdGU6Cj4gPiA-IFBsYW5uaW5nIHVwZGF0ZSA4OiBQbGVhc2UgY29uZmlybSB0aGUgcHJvamVjdG9yIGFuZCB0d28gbWljcm9waG9uZXMuCj4gPiA-IAo-ID4gPiBPbiBUaHUsIDE1IE9jdCAyMDI2IGF0IDA4OjMwLCBNb3JnYW4gd3JvdGU6Cj4gPiA-ID4gUGxhbm5pbmcgdXBkYXRlIDc6IERvb3JzIG9wZW4gYXQgNiBwbTsgdm9sdW50ZWVycyBhcnJpdmUgYXQgNS4KPiA-ID4gPiAKPiA-ID4gPiBPbiBUaHUsIDE1IE9jdCAyMDI2IGF0IDA4OjMwLCBNb3JnYW4gd3JvdGU6Cj4gPiA-ID4gPiBQbGFubmluZyB1cGRhdGUgNjogQ2F0ZXJpbmcgY2FuIHNlcnZlIDQwIHBlb3BsZSwgaW5jbHVkaW5nIHZlZ2V0YXJpYW4gbWVhbHMuCj4gPiA-ID4gPiAKPiA-ID4gPiA-IE9uIFRodSwgMTUgT2N0IDIwMjYgYXQgMDg6MzAsIE1vcmdhbiB3cm90ZToKPiA-ID4gPiA-ID4gUGxhbm5pbmcgdXBkYXRlIDU6IFRoZSBoYWxsIGlzIGJvb2tlZCBmb3IgT2N0b2JlciAzMC4KPiA-ID4gPiA-ID4gCj4gPiA-ID4gPiA-IE9uIFRodSwgMTUgT2N0IDIwMjYgYXQgMDg6MzAsIE1vcmdhbiB3cm90ZToKPiA-ID4gPiA-ID4gPiBQbGFubmluZyB1cGRhdGUgNDogUGxlYXNlIGNvbmZpcm0gdGhlIHByb2plY3RvciBhbmQgdHdvIG1pY3JvcGhvbmVzLgo-ID4gPiA-ID4gPiA-IAo-ID4gPiA-ID4gPiA-IE9uIFRodSwgMTUgT2N0IDIwMjYgYXQgMDg6MzAsIE1vcmdhbiB3cm90ZToKPiA-ID4gPiA-ID4gPiA-IFBsYW5uaW5nIHVwZGF0ZSAzOiBEb29ycyBvcGVuIGF0IDYgcG07IHZvbHVudGVlcnMgYXJyaXZlIGF0IDUuCj4gPiA-ID4gPiA-ID4gPiAKPiA-ID4gPiA-ID4gPiA-IE9uIFRodSwgMTUgT2N0IDIwMjYgYXQgMDg6MzAsIE1vcmdhbiB3cm90ZToKPiA-ID4gPiA-ID4gPiA-ID4gUGxhbm5pbmcgdXBkYXRlIDI6IENhdGVyaW5nIGNhbiBzZXJ2ZSA0MCBwZW9wbGUsIGluY2x1ZGluZyB2ZWdldGFyaWFuIG1lYWxzLgo-ID4gPiA-ID4gPiA-ID4gPiAKPiA-ID4gPiA-ID4gPiA-ID4gT24gVGh1LCAxNSBPY3QgMjAyNiBhdCAwODozMCwgTW9yZ2FuIHdyb3RlOgo-ID4gPiA-ID4gPiA-ID4gPiA-IFBsYW5uaW5nIHVwZGF0ZSAxOiBUaGUgaGFsbCBpcyBib29rZWQgZm9yIE9jdG9iZXIgMzAuCg"
+        }
+      }
+    },
+    {
+      "id": "literal-marker",
+      "threadId": "t-marker",
+      "internalDate": "1792074600000",
+      "snippet": "Attachment marker example",
+      "payload": {
+        "mimeType": "multipart/mixed",
+        "headers": [
+          {
+            "name": "Subject",
+            "value": "Attachment marker example"
+          },
+          {
+            "name": "From",
+            "value": "Morgan <morgan@example.test>"
+          },
+          {
+            "name": "To",
+            "value": "Vi <vi@example.test>"
+          },
+          {
+            "name": "Date",
+            "value": "Thu, 15 Oct 2026 08:30:00 +0000"
+          },
+          {
+            "name": "Authentication-Results",
+            "value": "mx.example.test; dmarc=pass"
+          }
+        ],
+        "parts": [
+          {
+            "mimeType": "text/plain",
+            "body": {
+              "data": "U3RhcnQK8J-TjiBBdHRhY2htZW50cyAoMSk6ClRoaXMgaXMgbGl0ZXJhbCB0ZXh0CkRvIG5vdCBsb3NlIHRoaXMgZW5kaW5n"
+            }
+          },
+          {
+            "partId": "1",
+            "filename": "notes.pdf",
+            "mimeType": "application/pdf",
+            "body": {
+              "attachmentId": "opaque-fixture-id",
+              "size": 1024
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
