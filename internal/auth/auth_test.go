@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -235,7 +236,7 @@ func TestLoginManualMode(t *testing.T) {
 	a, _ := newTestAuthenticator(t, fakeTokenJSON)
 
 	var out strings.Builder
-	in := strings.NewReader("http://localhost:9999/oauth/callback?state=state&code=pasted-code\n")
+	in := strings.NewReader("pasted-code\n")
 
 	token, err := a.LoginWithOptions(context.Background(), LoginOptions{
 		NoBrowser: true,
@@ -293,7 +294,7 @@ func TestLoginBrowserFlowEndToEnd(t *testing.T) {
 			if err != nil {
 				return
 			}
-			callback := fmt.Sprintf("http://localhost:%s%s?state=state&code=e2e-code", ru.Port(), ru.Path)
+			callback := fmt.Sprintf("http://localhost:%s%s?state=%s&code=e2e-code", ru.Port(), ru.Path, u.Query().Get("state"))
 			http.Get(callback) //nolint:errcheck // best-effort simulation
 		}()
 		return nil
@@ -351,7 +352,7 @@ func TestLoginManualModeUsesRealLoopbackPort(t *testing.T) {
 	a, _ := newTestAuthenticator(t, fakeTokenJSON)
 
 	var out strings.Builder
-	in := strings.NewReader("http://localhost:9999/oauth/callback?code=c\n")
+	in := strings.NewReader("c\n")
 
 	if _, err := a.LoginWithOptions(context.Background(), LoginOptions{
 		NoBrowser: true,
@@ -371,5 +372,89 @@ func TestLoginManualModeUsesRealLoopbackPort(t *testing.T) {
 	port, err := strconv.Atoi(m[1])
 	if err != nil || port <= 0 || port > 65535 {
 		t.Errorf("RedirectURL port = %q, want a valid TCP port", m[1])
+	}
+}
+
+func TestLoginWebRedirect(t *testing.T) {
+	withTempConfigDir(t)
+	const redirect = "https://portal.example/oauth/google"
+	for _, web := range []bool{false, true} {
+		t.Run(fmt.Sprint(web), func(t *testing.T) {
+			creds := &config.Credentials{}
+			if web {
+				creds.Web.ClientID = "web"
+			} else {
+				creds.Installed.ClientID = "installed"
+			}
+			a := NewFromCredentials(creds, []string{"email"})
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				r.ParseForm()
+				if r.Form.Get("redirect_uri") != a.OAuthConfig.RedirectURL {
+					t.Error("exchange redirect differs")
+				}
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprint(w, fakeTokenJSON)
+			}))
+			defer ts.Close()
+			a.OAuthConfig.Endpoint.TokenURL = ts.URL
+			opts := LoginOptions{NoBrowser: true, Input: strings.NewReader("code\n"), Output: io.Discard}
+			if web {
+				opts.RedirectURL = redirect
+			}
+			if _, err := a.LoginWithOptions(context.Background(), opts); err != nil {
+				t.Fatal(err)
+			}
+			if web {
+				if a.OAuthConfig.RedirectURL != redirect {
+					t.Fatal(a.OAuthConfig.RedirectURL)
+				}
+			} else if !strings.HasPrefix(a.OAuthConfig.RedirectURL, "http://localhost:") {
+				t.Fatal(a.OAuthConfig.RedirectURL)
+			}
+		})
+	}
+}
+
+func TestManualStateMismatch(t *testing.T) {
+	for _, state := range []string{"", "wrong"} {
+		_, err := promptForAuthCode("https://accounts.google.com/auth?state=expected", strings.NewReader("https://portal.example/oauth/google?code=c&state="+state+"\n"), io.Discard)
+		if err == nil || !strings.Contains(err.Error(), "state mismatch") {
+			t.Fatalf("got %v", err)
+		}
+	}
+	code, err := promptForAuthCode("https://accounts.google.com/auth?state=expected", strings.NewReader("https://portal.example/oauth/google?code=c&state=expected\n"), io.Discard)
+	if err != nil || code != "c" {
+		t.Fatalf("%s %v", code, err)
+	}
+}
+
+func TestLoopbackRejectsWrongState(t *testing.T) {
+	cb, cleanup, err := startCallbackServer("expected")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	for _, state := range []string{"", "wrong"} {
+		res, err := http.Get(cb.url + "?code=bad&state=" + state)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusBadRequest {
+			t.Fatal(res.StatusCode)
+		}
+		select {
+		case <-cb.codeCh:
+			t.Fatal("accepted mismatched state")
+		default:
+		}
+	}
+	res, err := http.Get(cb.url + "?code=good&state=expected")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if code := <-cb.codeCh; code != "good" {
+		t.Fatal(code)
 	}
 }
