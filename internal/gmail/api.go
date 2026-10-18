@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"mime"
-	"mime/quotedprintable"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -538,29 +537,28 @@ func createMessage(to, subject, body string, attachments []Attachment) *gmail.Me
 // buildMessage assembles the RFC 5322 message. extraHeaders is inserted verbatim
 // after Subject and must already be CRLF-terminated; replies use it to carry
 // In-Reply-To and References.
+//
+// The body is a multipart/alternative of the text as written and an HTML
+// rendering of it (body.go says why); attachments wrap that in multipart/mixed.
 func buildMessage(to, subject, body string, attachments []Attachment, extraHeaders string) *gmail.Message {
 	encSubject := mime.BEncoding.Encode("UTF-8", subject)
-	// Encode the text part, not just Gmail's outer base64url envelope. Soft MIME
-	// line breaks keep long paragraphs within transport limits without adding
-	// visible newlines, and carry UTF-8 safely through 7-bit mail transports.
-	var text bytes.Buffer
-	writer := quotedprintable.NewWriter(&text)
-	_, _ = writer.Write([]byte(body)) // bytes.Buffer writes cannot fail.
-	_ = writer.Close()                // Flush the final line before reading text.
-	encodedBody := text.String()
-
-	if len(attachments) == 0 {
-		msg := fmt.Sprintf("From: me\r\nTo: %s\r\nSubject: %s\r\n%sMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"UTF-8\"\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n%s", to, encSubject, extraHeaders, encodedBody)
-		encoded := base64.URLEncoding.EncodeToString([]byte(msg))
-		return &gmail.Message{Raw: encoded}
-	}
-
-	boundary := fmt.Sprintf("pi-google-%d", time.Now().UnixNano())
+	stamp := time.Now().UnixNano()
+	// Neither boundary's delimiter line starts with the other's, as RFC 2046
+	// requires of nested multiparts.
+	alternative := fmt.Sprintf("pi-google-alt-%d", stamp)
 
 	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "From: me\r\nTo: %s\r\nSubject: %s\r\n%sMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"%s\"\r\n\r\n", to, encSubject, extraHeaders, boundary)
+	fmt.Fprintf(&buf, "From: me\r\nTo: %s\r\nSubject: %s\r\n%sMIME-Version: 1.0\r\n", to, encSubject, extraHeaders)
 
-	fmt.Fprintf(&buf, "--%s\r\nContent-Type: text/plain; charset=\"UTF-8\"\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n%s\r\n", boundary, encodedBody)
+	if len(attachments) == 0 {
+		writeBody(&buf, body, alternative)
+		return &gmail.Message{Raw: base64.URLEncoding.EncodeToString(buf.Bytes())}
+	}
+
+	boundary := fmt.Sprintf("pi-google-%d", stamp)
+	fmt.Fprintf(&buf, "Content-Type: multipart/mixed;\r\n boundary=\"%s\"\r\n\r\n", boundary)
+	fmt.Fprintf(&buf, "--%s\r\n", boundary)
+	writeBody(&buf, body, alternative)
 
 	for _, att := range attachments {
 		mt := att.MimeType

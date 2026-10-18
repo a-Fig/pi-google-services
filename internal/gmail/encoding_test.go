@@ -14,10 +14,15 @@ import (
 	"strings"
 	"testing"
 
+	"golang.org/x/net/html"
 	"google.golang.org/api/gmail/v1"
 )
 
-// Decode the actual RFC 5322 wire message, including the text part's own CTE.
+type mimeHeader interface{ Get(string) string }
+
+// assertTextEncoding decodes the actual RFC 5322 wire message and checks both
+// alternatives of its body against the text the caller wrote: the text/plain
+// part decodes to exactly that text, and the text/html part renders to it.
 // Gmail's outer base64url encoding does not protect the decoded MIME body.
 func assertTextEncoding(t *testing.T, msg *gmail.Message, body string, attachments []Attachment) *mail.Message {
 	t.Helper()
@@ -29,52 +34,36 @@ func assertTextEncoding(t *testing.T, msg *gmail.Message, body string, attachmen
 	if err != nil {
 		t.Fatal(err)
 	}
-	textHeader, textReader := message.Header, message.Body
-	var parts *multipart.Reader
+	var bodyHeader mimeHeader = message.Header
+	var bodyReader io.Reader = message.Body
+	var mixed *multipart.Reader
 	if len(attachments) > 0 {
-		mediaType, params, err := mime.ParseMediaType(message.Header.Get("Content-Type"))
-		if err != nil || mediaType != "multipart/mixed" {
-			t.Fatalf("multipart Content-Type = %q: %v", mediaType, err)
-		}
-		parts = multipart.NewReader(message.Body, params["boundary"])
-		part, err := parts.NextRawPart() // NextPart silently decodes QP and removes its header.
+		mixed = multipart.NewReader(message.Body, boundaryOf(t, message.Header, "multipart/mixed"))
+		part, err := mixed.NextRawPart()
 		if err != nil {
 			t.Fatal(err)
 		}
-		textHeader, textReader = mail.Header(part.Header), part
+		bodyHeader, bodyReader = part.Header, part
 	}
-	if got := textHeader.Get("Content-Transfer-Encoding"); got != "quoted-printable" {
-		t.Fatalf("text Content-Transfer-Encoding = %q, want quoted-printable", got)
+	alternatives := multipart.NewReader(bodyReader, boundaryOf(t, bodyHeader, "multipart/alternative"))
+
+	// Text MIME canonicalizes line endings; the plain part must keep every
+	// authored break, space and Unicode character, without adding hard wraps
+	// or joining lines. So CRLF appears exactly where the input had a newline.
+	text := decodeQuotedPrintablePart(t, alternatives, `text/plain; charset="UTF-8"`)
+	if want := strings.ReplaceAll(normalizeNewlines(body), "\n", "\r\n"); text != want {
+		t.Fatalf("decoded text/plain changed:\ngot  %q\nwant %q", text, want)
 	}
-	if got := textHeader.Get("Content-Type"); got != `text/plain; charset="UTF-8"` {
-		t.Fatalf("text Content-Type = %q", got)
+	source := decodeQuotedPrintablePart(t, alternatives, `text/html; charset="UTF-8"`)
+	if got, want := renderedText(t, source), visibleText(body); got != want {
+		t.Fatalf("text/html renders differently:\ngot  %q\nwant %q\nsource %q", got, want, source)
 	}
-	encoded, err := io.ReadAll(textReader)
-	if err != nil {
-		t.Fatal(err)
+	if _, err := alternatives.NextRawPart(); err != io.EOF {
+		t.Fatalf("extra alternative or broken closing boundary: %v", err)
 	}
-	for _, line := range bytes.Split(encoded, []byte("\r\n")) {
-		if len(line) > 76 {
-			t.Fatalf("encoded text line is %d bytes, want at most 76", len(line))
-		}
-		for _, b := range line {
-			if b > 127 || b == '\r' || b == '\n' {
-				t.Fatalf("non-ASCII or non-CRLF data in encoded line: %q", line)
-			}
-		}
-	}
-	decoded, err := io.ReadAll(quotedprintable.NewReader(bytes.NewReader(encoded)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Text MIME canonicalizes line endings; it must preserve every authored break,
-	// space and Unicode character, without adding hard wraps or joining lines.
-	want := strings.ReplaceAll(strings.ReplaceAll(body, "\r\n", "\n"), "\n", "\r\n")
-	if string(decoded) != want {
-		t.Fatalf("decoded body changed:\ngot  %q\nwant %q", decoded, want)
-	}
+
 	for _, attachment := range attachments {
-		part, err := parts.NextRawPart()
+		part, err := mixed.NextRawPart()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -86,12 +75,121 @@ func assertTextEncoding(t *testing.T, msg *gmail.Message, body string, attachmen
 			t.Fatalf("attachment changed: %q, %v", data, err)
 		}
 	}
-	if parts != nil {
-		if _, err := parts.NextRawPart(); err != io.EOF {
+	if mixed != nil {
+		if _, err := mixed.NextRawPart(); err != io.EOF {
 			t.Fatalf("extra MIME part or broken closing boundary: %v", err)
 		}
 	}
 	return message
+}
+
+func boundaryOf(t *testing.T, header mimeHeader, want string) string {
+	t.Helper()
+	mediaType, params, err := mime.ParseMediaType(header.Get("Content-Type"))
+	if err != nil || mediaType != want || params["boundary"] == "" {
+		t.Fatalf("Content-Type = %q, want %s with a boundary: %v", header.Get("Content-Type"), want, err)
+	}
+	return params["boundary"]
+}
+
+// decodeQuotedPrintablePart reads the next part raw (NextPart would silently
+// decode quoted-printable and remove its header), checks its transport lines
+// and returns it decoded.
+func decodeQuotedPrintablePart(t *testing.T, r *multipart.Reader, contentType string) string {
+	t.Helper()
+	part, err := r.NextRawPart()
+	if err != nil {
+		t.Fatalf("missing %s part: %v", contentType, err)
+	}
+	if got := part.Header.Get("Content-Type"); got != contentType {
+		t.Fatalf("Content-Type = %q, want %q", got, contentType)
+	}
+	if got := part.Header.Get("Content-Transfer-Encoding"); got != "quoted-printable" {
+		t.Fatalf("%s Content-Transfer-Encoding = %q, want quoted-printable", contentType, got)
+	}
+	encoded, err := io.ReadAll(part)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range bytes.Split(encoded, []byte("\r\n")) {
+		if len(line) > 76 {
+			t.Fatalf("encoded %s line is %d bytes, want at most 76", contentType, len(line))
+		}
+		for _, b := range line {
+			if b > 127 || b == '\r' || b == '\n' {
+				t.Fatalf("non-ASCII or non-CRLF data in encoded line: %q", line)
+			}
+		}
+	}
+	decoded, err := io.ReadAll(quotedprintable.NewReader(bytes.NewReader(encoded)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(decoded)
+}
+
+func normalizeNewlines(s string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\r", "\n")
+}
+
+// renderedText is the text a mail client displays for htmlBody's output, as a
+// browser lays out normal text: one line break per <br>, entities decoded,
+// collapsible whitespace (space, tab, CR, LF) dropped at the start of a line
+// and collapsed to one space elsewhere, and no-break spaces shown as spaces.
+// Trailing spaces are trimmed, as they are invisible.
+func renderedText(t *testing.T, source string) string {
+	t.Helper()
+	z := html.NewTokenizer(strings.NewReader(source))
+	var line, out strings.Builder
+	lineStart, afterSpace := true, false
+	endLine := func() {
+		out.WriteString(strings.TrimRight(line.String(), " "))
+		line.Reset()
+		lineStart, afterSpace = true, false
+	}
+	for {
+		switch z.Next() {
+		case html.ErrorToken:
+			if z.Err() != io.EOF {
+				t.Fatal(z.Err())
+			}
+			endLine()
+			return out.String()
+		case html.TextToken:
+			for _, r := range string(z.Text()) {
+				switch {
+				case strings.ContainsRune(" \t\r\n", r):
+					if !lineStart && !afterSpace {
+						line.WriteRune(' ')
+						afterSpace = true
+					}
+				case r == ' ':
+					line.WriteRune(' ')
+					lineStart, afterSpace = false, false
+				default:
+					line.WriteRune(r)
+					lineStart, afterSpace = false, false
+				}
+			}
+		case html.StartTagToken, html.SelfClosingTagToken:
+			if name, _ := z.TagName(); string(name) == "br" {
+				endLine()
+				out.WriteString("\n")
+			}
+		}
+	}
+}
+
+// visibleText is what renderedText should return for body: its lines, with a
+// tab shown as four spaces, a no-break space as a space, and trailing spaces
+// trimmed.
+func visibleText(body string) string {
+	lines := strings.Split(normalizeNewlines(body), "\n")
+	for i, line := range lines {
+		line = strings.ReplaceAll(strings.ReplaceAll(line, "\t", "    "), " ", " ")
+		lines[i] = strings.TrimRight(line, " ")
+	}
+	return strings.Join(lines, "\n")
 }
 
 func TestMessageTextEncoding(t *testing.T) {
@@ -100,7 +198,11 @@ func TestMessageTextEncoding(t *testing.T) {
 		"unicode":             strings.Repeat("Café — résumé 日本語 🙂 = yes. ", 50),
 		"structure":           "Hi Tyler,\n\n- first item\n- second item\n\n> quoted text\n\nThanks,\nVi\n",
 		"CRLF":                "First paragraph.\r\n\r\nSecond paragraph.\r\n",
+		"lone CR":             "Old Mac line.\rNext line.",
 		"whitespace":          "Leading and trailing whitespace: \t\n\tindented\n\n\n",
+		"indentation":         "Steps:\n  - two-space indent\n\tafter a tab\n    four spaces\na\tb\n \tmixed",
+		"spaces":              "Two  spaces,   three, and    a literal no-break space.",
+		"markup and links":    `Book it at https://example.com/book?when=fri&who=2. Fees (https://en.wikipedia.org/wiki/Fee_(disambiguation)) are <b>not</b> "bold" & won't be.`,
 		"empty":               "",
 		"soft-break boundary": strings.Repeat("a", 75) + "=🙂" + strings.Repeat("b", 80),
 	}
@@ -116,6 +218,66 @@ func TestMessageTextEncoding(t *testing.T) {
 				assertTextEncoding(t, createMessage("test@example.com", "Body encoding", body, attachments), body, attachments)
 			})
 		}
+	}
+}
+
+// The authored paragraph must be one unbroken run of HTML text: that is what
+// lets it wrap to the reader's window instead of at Gmail's 70 columns.
+func TestHTMLBody(t *testing.T) {
+	paragraph := strings.Repeat("One long paragraph that must stay one line. ", 20)
+	cases := map[string]struct{ in, want string }{
+		"paragraphs": {
+			paragraph + "\n\nThanks,\nVi",
+			`<div dir="auto">` + paragraph + "<br>\r\n<br>\r\nThanks,<br>\r\nVi</div>\r\n",
+		},
+		"escaping": {
+			`<script>alert("x")</script> & 'quotes'`,
+			`<div dir="auto">&lt;script&gt;alert(&#34;x&#34;)&lt;/script&gt; &amp; &#39;quotes&#39;</div>` + "\r\n",
+		},
+		"link with query and sentence period": {
+			"See https://example.com/a?b=1&c=2.",
+			`<div dir="auto">See <a href="https://example.com/a?b=1&amp;c=2">https://example.com/a?b=1&amp;c=2</a>.</div>` + "\r\n",
+		},
+		"link inside parentheses keeps its own": {
+			"(https://en.wikipedia.org/wiki/Foo_(bar))",
+			`<div dir="auto">(<a href="https://en.wikipedia.org/wiki/Foo_(bar)">https://en.wikipedia.org/wiki/Foo_(bar)</a>)</div>` + "\r\n",
+		},
+		"link ends at an em dash": {
+			"http://example.com—thanks",
+			`<div dir="auto"><a href="http://example.com">http://example.com</a>—thanks</div>` + "\r\n",
+		},
+		"angle-bracketed link": {
+			"<https://example.com/x>",
+			`<div dir="auto">&lt;<a href="https://example.com/x">https://example.com/x</a>&gt;</div>` + "\r\n",
+		},
+		"not links": {
+			"javascript:alert(1) xhttps://example.com https:// ftp://example.com",
+			`<div dir="auto">javascript:alert(1) xhttps://example.com https:// ftp://example.com</div>` + "\r\n",
+		},
+		"spaces": {
+			"a  b   c",
+			`<div dir="auto">a &nbsp;b &nbsp; c</div>` + "\r\n",
+		},
+		"indentation": {
+			"  - two spaces\n\ttab\n x",
+			`<div dir="auto">&nbsp; - two spaces<br>` + "\r\n" + `&nbsp;&nbsp;&nbsp;&nbsp;tab<br>` + "\r\n" + `&nbsp;x</div>` + "\r\n",
+		},
+		"indented link": {
+			"  https://example.com",
+			`<div dir="auto">&nbsp; <a href="https://example.com">https://example.com</a></div>` + "\r\n",
+		},
+		"URL running into non-ASCII stays text": {
+			"https://fr.wikipedia.org/wiki/Café and https://example.com/2026年 but https://example.com/ok",
+			`<div dir="auto">https://fr.wikipedia.org/wiki/Café and https://example.com/2026年 but <a href="https://example.com/ok">https://example.com/ok</a></div>` + "\r\n",
+		},
+		"empty": {"", `<div dir="auto"></div>` + "\r\n"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			if got := htmlBody(tc.in); got != tc.want {
+				t.Fatalf("htmlBody(%q)\ngot  %q\nwant %q", tc.in, got, tc.want)
+			}
+		})
 	}
 }
 
