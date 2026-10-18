@@ -55,7 +55,7 @@ func assertTextEncoding(t *testing.T, msg *gmail.Message, body string, attachmen
 		t.Fatalf("decoded text/plain changed:\ngot  %q\nwant %q", text, want)
 	}
 	source := decodeQuotedPrintablePart(t, alternatives, `text/html; charset="UTF-8"`)
-	if got, want := renderedText(t, source), normalizeNewlines(body); got != want {
+	if got, want := renderedText(t, source), visibleText(body); got != want {
 		t.Fatalf("text/html renders differently:\ngot  %q\nwant %q\nsource %q", got, want, source)
 	}
 	if _, err := alternatives.NextRawPart(); err != io.EOF {
@@ -132,33 +132,64 @@ func normalizeNewlines(s string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\r", "\n")
 }
 
-// renderedText is the text a mail client displays for htmlBody's output: one
-// line break per <br>, entities decoded, and the source line breaks htmlBody
-// writes after each <br> dropped, since HTML does not display them. It fails
-// on a run of two collapsible spaces, which a client would show as one.
+// renderedText is the text a mail client displays for htmlBody's output, as a
+// browser lays out normal text: one line break per <br>, entities decoded,
+// collapsible whitespace (space, tab, CR, LF) dropped at the start of a line
+// and collapsed to one space elsewhere, and no-break spaces shown as spaces.
+// Trailing spaces are trimmed, as they are invisible.
 func renderedText(t *testing.T, source string) string {
 	t.Helper()
 	z := html.NewTokenizer(strings.NewReader(source))
-	var out strings.Builder
+	var line, out strings.Builder
+	lineStart, afterSpace := true, false
+	endLine := func() {
+		out.WriteString(strings.TrimRight(line.String(), " "))
+		line.Reset()
+		lineStart, afterSpace = true, false
+	}
 	for {
 		switch z.Next() {
 		case html.ErrorToken:
 			if z.Err() != io.EOF {
 				t.Fatal(z.Err())
 			}
+			endLine()
 			return out.String()
 		case html.TextToken:
-			text := strings.ReplaceAll(string(z.Raw()), "\r\n", "")
-			if strings.Contains(text, "  ") {
-				t.Fatalf("HTML text %q would collapse its spaces", text)
+			for _, r := range string(z.Text()) {
+				switch {
+				case strings.ContainsRune(" \t\r\n", r):
+					if !lineStart && !afterSpace {
+						line.WriteRune(' ')
+						afterSpace = true
+					}
+				case r == ' ':
+					line.WriteRune(' ')
+					lineStart, afterSpace = false, false
+				default:
+					line.WriteRune(r)
+					lineStart, afterSpace = false, false
+				}
 			}
-			out.WriteString(html.UnescapeString(strings.ReplaceAll(text, "&nbsp;", " ")))
 		case html.StartTagToken, html.SelfClosingTagToken:
 			if name, _ := z.TagName(); string(name) == "br" {
+				endLine()
 				out.WriteString("\n")
 			}
 		}
 	}
+}
+
+// visibleText is what renderedText should return for body: its lines, with a
+// tab shown as four spaces, a no-break space as a space, and trailing spaces
+// trimmed.
+func visibleText(body string) string {
+	lines := strings.Split(normalizeNewlines(body), "\n")
+	for i, line := range lines {
+		line = strings.ReplaceAll(strings.ReplaceAll(line, "\t", "    "), " ", " ")
+		lines[i] = strings.TrimRight(line, " ")
+	}
+	return strings.Join(lines, "\n")
 }
 
 func TestMessageTextEncoding(t *testing.T) {
@@ -169,6 +200,7 @@ func TestMessageTextEncoding(t *testing.T) {
 		"CRLF":                "First paragraph.\r\n\r\nSecond paragraph.\r\n",
 		"lone CR":             "Old Mac line.\rNext line.",
 		"whitespace":          "Leading and trailing whitespace: \t\n\tindented\n\n\n",
+		"indentation":         "Steps:\n  - two-space indent\n\tafter a tab\n    four spaces\na\tb\n \tmixed",
 		"spaces":              "Two  spaces,   three, and    a literal no-break space.",
 		"markup and links":    `Book it at https://example.com/book?when=fri&who=2. Fees (https://en.wikipedia.org/wiki/Fee_(disambiguation)) are <b>not</b> "bold" & won't be.`,
 		"empty":               "",
@@ -225,6 +257,18 @@ func TestHTMLBody(t *testing.T) {
 		"spaces": {
 			"a  b   c",
 			`<div dir="auto">a &nbsp;b &nbsp; c</div>` + "\r\n",
+		},
+		"indentation": {
+			"  - two spaces\n\ttab\n x",
+			`<div dir="auto">&nbsp; - two spaces<br>` + "\r\n" + `&nbsp;&nbsp;&nbsp;&nbsp;tab<br>` + "\r\n" + `&nbsp;x</div>` + "\r\n",
+		},
+		"indented link": {
+			"  https://example.com",
+			`<div dir="auto">&nbsp; <a href="https://example.com">https://example.com</a></div>` + "\r\n",
+		},
+		"URL running into non-ASCII stays text": {
+			"https://fr.wikipedia.org/wiki/Café and https://example.com/2026年 but https://example.com/ok",
+			`<div dir="auto">https://fr.wikipedia.org/wiki/Café and https://example.com/2026年 but <a href="https://example.com/ok">https://example.com/ok</a></div>` + "\r\n",
 		},
 		"empty": {"", `<div dir="auto"></div>` + "\r\n"},
 	}

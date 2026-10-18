@@ -556,7 +556,7 @@ func buildMessage(to, subject, body string, attachments []Attachment, extraHeade
 	}
 
 	boundary := fmt.Sprintf("pi-google-%d", stamp)
-	fmt.Fprintf(&buf, "Content-Type: multipart/mixed; boundary=\"%s\"\r\n\r\n", boundary)
+	fmt.Fprintf(&buf, "Content-Type: multipart/mixed;\r\n boundary=\"%s\"\r\n\r\n", boundary)
 	fmt.Fprintf(&buf, "--%s\r\n", boundary)
 	writeBody(&buf, body, alternative)
 

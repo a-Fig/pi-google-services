@@ -7,30 +7,32 @@ import (
 	"mime/quotedprintable"
 	"regexp"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // Why every outgoing message carries an HTML part (pi-vi #265).
 //
-// Gmail does not deliver a text/plain part the way it was submitted. It decodes
-// the part and writes it out again folded at word boundaries, at most 70
-// columns, with CRLF, no Content-Transfer-Encoding and no format=flowed: the
-// same shape as the plain part of mail written in Gmail's own composer. Every
-// client shows those folds as line breaks, so a paragraph Vi sent as one line
-// arrived broken mid-sentence. Seen on pi-vi #265 for an unencoded part, and
-// quoted-printable parts (pi-google-services #3) kept arriving folded too,
-// because the folding happens after Gmail has decoded them.
+// Gmail does not deliver a text/plain part the way it was submitted. Measured
+// on pi-vi #265 (2026-10-05, before #3): a paragraph Vi sent as one unencoded
+// line arrived folded at word boundaries to at most 70 columns, with CRLF and
+// no Content-Transfer-Encoding, the shape of the plain part of mail written in
+// Gmail's own composer, and every client shows those folds as line breaks.
+// Other Gmail senders report quoted-printable parts folded the same way, since
+// Gmail decodes them first, so #3's encoding is not expected to help; no
+// message Vi sent through a #3 connector has been checked.
 //
-// The text/html part of a multipart/alternative message is not folded that
-// way, and HTML ignores source line breaks anyway; Gmail and other clients
-// display it in preference to the plain part. So the plain text the caller wrote
-// goes first, for clients that only read plain text, and a minimal HTML
+// The text/html part of a multipart/alternative message is reported delivered
+// intact, HTML ignores source line breaks anyway, and Gmail and other clients
+// display it in preference to the plain part. So the plain text the caller
+// wrote goes first, for clients that only read plain text, and a minimal HTML
 // rendering of the same text goes last: each authored line break becomes <br>
 // and nothing else is added, so paragraphs wrap to the reader's window.
 
 // writeBody writes the message body as a multipart/alternative entity,
 // starting with its own Content-Type header.
 func writeBody(buf *bytes.Buffer, body, boundary string) {
-	fmt.Fprintf(buf, "Content-Type: multipart/alternative; boundary=\"%s\"\r\n\r\n", boundary)
+	fmt.Fprintf(buf, "Content-Type: multipart/alternative;\r\n boundary=\"%s\"\r\n\r\n", boundary)
 	fmt.Fprintf(buf, "--%s\r\nContent-Type: text/plain; charset=\"UTF-8\"\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n%s\r\n", boundary, quotedPrintable(body))
 	fmt.Fprintf(buf, "--%s\r\nContent-Type: text/html; charset=\"UTF-8\"\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n%s\r\n", boundary, quotedPrintable(htmlBody(body)))
 	fmt.Fprintf(buf, "--%s--\r\n", boundary)
@@ -49,7 +51,8 @@ func quotedPrintable(s string) string {
 
 // htmlBody renders plain text as HTML that displays the same text: escaped,
 // one <br> per line break (CRLF, LF or a lone CR, as the quoted-printable
-// writer counts them), runs of spaces kept, and bare http(s) URLs linked.
+// writer counts them), indentation and runs of spaces kept, and bare http(s)
+// URLs linked.
 func htmlBody(text string) string {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
@@ -77,12 +80,18 @@ func writeHTMLLine(b *strings.Builder, line string) {
 		if strings.HasSuffix(url, "://") {
 			continue // A scheme with nothing after it.
 		}
+		// A letter or digit right after the match is a non-ASCII part of the
+		// URL itself (…/wiki/Café): a link to the part before it would lead
+		// somewhere else, so it stays text and the client may link it.
+		if next, _ := utf8.DecodeRuneInString(line[m[1]:]); unicode.IsLetter(next) || unicode.IsDigit(next) {
+			continue
+		}
 		escaped := html.EscapeString(url)
-		b.WriteString(htmlText(line[last:m[0]]))
+		b.WriteString(htmlText(line[last:m[0]], last == 0))
 		b.WriteString(`<a href="` + escaped + `">` + escaped + `</a>`)
 		last = m[0] + len(url)
 	}
-	b.WriteString(htmlText(line[last:]))
+	b.WriteString(htmlText(line[last:], last == 0))
 }
 
 // trimURL drops punctuation that ends the sentence rather than the URL: a
@@ -101,8 +110,27 @@ func trimURL(url string) string {
 	return url
 }
 
-// htmlText escapes text and keeps runs of spaces, which HTML would collapse
-// into one.
-func htmlText(s string) string {
-	return strings.ReplaceAll(html.EscapeString(s), "  ", " &nbsp;")
+// htmlText escapes text and keeps the spacing HTML would collapse or drop: a
+// space that starts the line or follows another space becomes &nbsp;, and a
+// tab becomes four. Single spaces stay breakable, so lines still wrap.
+func htmlText(s string, lineStart bool) string {
+	var b strings.Builder
+	afterSpace := lineStart
+	for _, c := range []byte(html.EscapeString(s)) {
+		switch {
+		case c == ' ' && afterSpace:
+			b.WriteString("&nbsp;")
+			afterSpace = false
+		case c == ' ':
+			b.WriteByte(' ')
+			afterSpace = true
+		case c == '\t':
+			b.WriteString("&nbsp;&nbsp;&nbsp;&nbsp;")
+			afterSpace = false
+		default:
+			b.WriteByte(c)
+			afterSpace = false
+		}
+	}
+	return b.String()
 }
