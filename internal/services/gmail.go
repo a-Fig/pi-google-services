@@ -66,7 +66,7 @@ func (s *GmailService) Tools() []mcp.ToolDefinition {
 		{Name: "get-thread", Description: "Read a conversation page.", InputSchema: mcp.InputSchema{Type: "object", Properties: map[string]mcp.PropertySchema{"threadId": {Type: "string"}, "cursor": {Type: "string", Description: "nextCursor from the previous page"}}, Required: []string{"threadId"}}},
 		{
 			Name:        "search-emails",
-			Description: "Search emails by query",
+			Description: "Search the whole mailbox by query (Gmail syntax; in:sent, in:anywhere and so on work)",
 			InputSchema: mcp.InputSchema{
 				Type: "object",
 				Properties: map[string]mcp.PropertySchema{

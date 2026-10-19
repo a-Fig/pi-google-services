@@ -114,13 +114,21 @@ func New(ctx context.Context, ts oauth2.TokenSource, options ...option.ClientOpt
 
 // ListInbox returns recent messages from the inbox.
 func (s *Service) ListInbox(ctx context.Context, maxResults int64, query string) ([]*EmailSummary, error) {
+	return s.list(ctx, maxResults, query, "INBOX")
+}
+
+// list returns recent messages matching query. labelID, when set, restricts the list to that
+// label; Gmail ANDs it with the query, so an empty one is what lets a query reach the whole
+// mailbox.
+func (s *Service) list(ctx context.Context, maxResults int64, query, labelID string) ([]*EmailSummary, error) {
 	if maxResults <= 0 {
 		maxResults = 20
 	}
 
-	call := s.svc.Messages.List("me").
-		MaxResults(maxResults).
-		LabelIds("INBOX")
+	call := s.svc.Messages.List("me").MaxResults(maxResults)
+	if labelID != "" {
+		call.LabelIds(labelID)
+	}
 	if query != "" {
 		call.Q(query)
 	}
@@ -414,9 +422,11 @@ func (s *Service) SendEmail(ctx context.Context, to, subject, body string, attac
 	return sent, nil
 }
 
-// SearchEmails searches messages by query.
+// SearchEmails searches messages by query across the whole mailbox, not only the inbox, so
+// "in:sent", "in:anywhere" and "to:someone" reach mail in any label. Spam and Trash stay out, as
+// in Gmail's own search, unless the query says "in:spam" or "in:trash".
 func (s *Service) SearchEmails(ctx context.Context, query string, maxResults int64) ([]*EmailSummary, error) {
-	return s.ListInbox(ctx, maxResults, query)
+	return s.list(ctx, maxResults, query, "")
 }
 
 // --- helpers ---
