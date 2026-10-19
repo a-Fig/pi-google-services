@@ -134,30 +134,35 @@ func (s *TasksService) handleListTasks(ctx context.Context, params json.RawMessa
 		return nil, rpcError("list tasks", err)
 	}
 
-	var b strings.Builder
+	return contentResponse(formatTaskSummaries(items)), nil
+}
+
+// formatTaskSummaries renders list-tasks output. Each line carries the task's ID, since
+// complete-task and delete-task cannot be called without one.
+func formatTaskSummaries(items []*tasks.TaskSummary) string {
 	if len(items) == 0 {
-		b.WriteString("No tasks found.")
-	} else {
-		for i, t := range items {
-			status := "⬜"
-			if t.Status == "completed" {
-				status = "✅"
-			}
-			b.WriteString(fmt.Sprintf("%d. %s %s", i+1, status, t.Title))
-			if t.Due != "" {
-				b.WriteString(fmt.Sprintf(" (due: %s)", t.Due))
-			}
-			if t.Notes != "" {
-				trunc := t.Notes
-				if len(trunc) > 80 {
-					trunc = trunc[:80] + "..."
-				}
-				b.WriteString(fmt.Sprintf("\n   📝 %s", trunc))
-			}
-			b.WriteString("\n")
-		}
+		return "No tasks found."
 	}
-	return contentResponse(b.String()), nil
+	var b strings.Builder
+	for i, t := range items {
+		status := "⬜"
+		if t.Status == "completed" {
+			status = "✅"
+		}
+		b.WriteString(fmt.Sprintf("%d. %s %s (ID: %s)", i+1, status, t.Title, t.ID))
+		if t.Due != "" {
+			b.WriteString(fmt.Sprintf(" (due: %s)", t.Due))
+		}
+		if t.Notes != "" {
+			trunc := t.Notes
+			if len(trunc) > 80 {
+				trunc = trunc[:80] + "..."
+			}
+			b.WriteString(fmt.Sprintf("\n   📝 %s", trunc))
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
 }
 
 func (s *TasksService) handleCreateTask(ctx context.Context, params json.RawMessage) (interface{}, *mcp.RPCError) {

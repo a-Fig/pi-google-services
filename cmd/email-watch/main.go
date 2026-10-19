@@ -124,7 +124,8 @@ func main() {
 		if cfg.Lookback != "" {
 			query += " " + cfg.Lookback
 		}
-		messages, err := svc.SearchEmails(ctx, query, 50)
+		// The inbox only: a rule is about mail that arrived, not mail Vi sent or the owner archived.
+		messages, err := svc.ListInbox(ctx, 50, query)
 		if err == nil && len(rule.AuthoredBy) > 0 {
 			filtered := messages[:0]
 			for _, message := range messages {

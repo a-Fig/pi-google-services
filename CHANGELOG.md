@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Fix: `search-emails` searches the whole mailbox** — it delegated to `ListInbox`, which always sent `labelIds=INBOX`; Gmail ANDs that with `q`, so `in:sent`, `in:anywhere` and `to:` matched inbox mail only. `email-watch` keeps the inbox-only list. Same bug as upstream v0.1.20, fixed without its rewrite so the parallel, retrying fetch stays.
+- **Fix: `list-tasks` prints each task's ID** (upstream v0.1.28, #8) — `complete-task` and `delete-task` need one.
+- **Added the MIT `LICENSE`** (from upstream), so the notice travels with the code.
 - **Receiving attachments**: `get-email` now lists the attachments on a message — filename, MIME type, size, inline flag and the attachment ID needed to fetch it.
 - **New tool `download-attachment`**: saves an attachment from a received email to disk by message ID + attachment ID. `savePath` accepts a directory (saves under the original filename), a full file path, or is omitted for the system temp directory.
 - Handles both storage models Gmail uses: large attachments fetched via `users.messages.attachments.get`, and small ones whose bytes ride inline in the MIME part (addressed by part ID).
