@@ -195,7 +195,7 @@ func (s *Service) list(ctx context.Context, maxResults int64, query, labelID str
 }
 
 const (
-	// listFetchConcurrency bounds ListInbox's parallel Messages.Get calls: a page of 30 takes six
+	// listFetchConcurrency bounds the parallel Messages.Get calls of list: a page of 30 takes six
 	// round trips rather than 30. A get costs 5 of the 250 quota units a user may spend per
 	// second, and email-watch polls from its own process beside this one, so at most twice this
 	// many are in flight for one account.
@@ -210,7 +210,7 @@ const (
 // so tests need not sit through it.
 var fetchRetryDelay = 500 * time.Millisecond
 
-// summary fetches one message's metadata for ListInbox. A message Gmail no longer has, deleted
+// summary fetches one message's metadata for list. A message Gmail no longer has, deleted
 // between the list and the get, comes back nil and is skipped, as before. Rate limits, Gmail's
 // server errors and requests that got no answer are tried again; anything else is an error.
 func (s *Service) summary(ctx context.Context, id string) (*EmailSummary, error) {
