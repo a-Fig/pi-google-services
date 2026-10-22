@@ -59,6 +59,7 @@ func TestLenientAddresses(t *testing.T) {
 		{"brackets in a name", "Foo [Bar] <a@x.com>, b@y.com", "a@x.com,b@y.com"},
 		{"a quoted comma stays in its name, which adds no one", `"Team, outsider@rival.com, ok" <team@x.com>, Foo [Bar] <a@x.com>`, "team@x.com,a@x.com"},
 		{"garbage is dropped, the rest kept", "good@x.com, <<broken, Name <ok@y.com>", "good@x.com,ok@y.com"},
+		{"a trailing comment does not replace the address", "Foo [Bar] <a@x.com> (note <evil@y.com>), b@y.com", "a@x.com,b@y.com"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -197,5 +198,16 @@ func TestReplyWithoutReplyAllCopiesOnlyWhatIsAsked(t *testing.T) {
 	})
 	if msg.Header.Get("Cc") != "<owner@x.com>" {
 		t.Errorf("Cc = %q", msg.Header.Get("Cc"))
+	}
+}
+
+func TestDetailCollectsEveryCcHeader(t *testing.T) {
+	detail := detailFromMessage(&gmail.Message{Payload: &gmail.MessagePart{Headers: []*gmail.MessagePartHeader{
+		header("To", "vi@x.com"),
+		header("Cc", "a@x.com"),
+		header("Cc", "Tyler <tyler@gmail.com>"),
+	}}})
+	if detail.Cc != "a@x.com, Tyler <tyler@gmail.com>" {
+		t.Errorf("Cc = %q", detail.Cc)
 	}
 }

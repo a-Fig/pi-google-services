@@ -343,7 +343,13 @@ func detailFromMessage(msg *gmail.Message) *EmailDetail {
 		case "To":
 			detail.To = h.Value
 		case "Cc":
-			detail.Cc = h.Value
+			// Every Cc header, as extractReplyTarget reads them: a message with
+			// two must not show fewer people than a reply-all copies.
+			if detail.Cc != "" {
+				detail.Cc += ", " + h.Value
+			} else {
+				detail.Cc = h.Value
+			}
 		case "Authentication-Results":
 			if detail.AuthenticationResults != "" {
 				detail.AuthenticationResults += "; " + h.Value

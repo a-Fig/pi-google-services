@@ -41,8 +41,9 @@ func ParseRecipients(list string) ([]*mail.Address, error) {
 // the wild does not always parse as a whole (net/mail refuses an Outlook-style
 // "a@x.com <a@x.com>" or a name with brackets in it), so a list that fails is
 // split at the commas outside quotes and angle brackets, and each entry that
-// still fails is reduced to the address in its last <...>, or kept when it is a
-// bare address. Anything else is dropped. The address never comes from a
+// still fails is reduced to the address in its first <...> (the last when the
+// first does not parse, as after a stray "<"), or kept when it is a bare
+// address. Anything else is dropped. The address never comes from a
 // display name, so a name cannot smuggle in a recipient.
 func lenientAddresses(header string) []*mail.Address {
 	if strings.TrimSpace(header) == "" {
@@ -58,17 +59,41 @@ func lenientAddresses(header string) []*mail.Address {
 			found = append(found, address)
 			continue
 		}
-		spec := entry
-		if open := strings.LastIndex(entry, "<"); open >= 0 {
-			if end := strings.Index(entry[open:], ">"); end > 0 {
-				spec = entry[open+1 : open+end]
+		for _, open := range []int{angleStart(entry), strings.LastIndex(entry, "<")} {
+			if open < 0 {
+				continue
 			}
-		}
-		if address, err := mail.ParseAddress(spec); err == nil && address.Name == "" {
-			found = append(found, address)
+			end := strings.Index(entry[open:], ">")
+			if end < 0 {
+				continue
+			}
+			if address, err := mail.ParseAddress(entry[open+1 : open+end]); err == nil && address.Name == "" {
+				found = append(found, address)
+				break
+			}
 		}
 	}
 	return found
+}
+
+// angleStart is the index of the first "<" outside quotes, where an entry's
+// address starts, or -1. It is tried before the last "<": a trailing
+// "(note <x@y>)" comment must not stand in for the address before it.
+func angleStart(entry string) int {
+	quoted, escaped := false, false
+	for i, r := range entry {
+		switch {
+		case escaped:
+			escaped = false
+		case r == '\\' && quoted:
+			escaped = true
+		case r == '"':
+			quoted = !quoted
+		case r == '<' && !quoted:
+			return i
+		}
+	}
+	return -1
 }
 
 // splitAddressList splits an address header at the commas that separate
