@@ -93,6 +93,7 @@ type bodyPage struct {
 	ThreadID    string                 `json:"threadId"`
 	From        string                 `json:"from"`
 	To          string                 `json:"to"`
+	Cc          string                 `json:"cc,omitempty"`
 	Subject     string                 `json:"subject"`
 	Dmarc       string                 `json:"dmarc"`
 	Date        string                 `json:"date"`
@@ -113,7 +114,7 @@ func emailPage(detail *gmail.EmailDetail, offset int) (*bodyPage, error) {
 		return nil, fmt.Errorf("offset must be between 0 and %d", len(chars))
 	}
 	end := min(offset+5000, len(chars))
-	page := &bodyPage{ID: detail.ID, ThreadID: detail.ThreadID, From: detail.From, To: detail.To, Subject: detail.Subject, Date: detail.Date, Dmarc: detail.Dmarc, Body: string(chars[offset:end]), Offset: offset, Total: len(chars), Attachments: detail.Attachments}
+	page := &bodyPage{ID: detail.ID, ThreadID: detail.ThreadID, From: detail.From, To: detail.To, Cc: detail.Cc, Subject: detail.Subject, Date: detail.Date, Dmarc: detail.Dmarc, Body: string(chars[offset:end]), Offset: offset, Total: len(chars), Attachments: detail.Attachments}
 	if end < len(chars) {
 		page.NextOffset = &end
 	}

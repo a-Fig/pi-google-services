@@ -346,6 +346,23 @@ func TestFormatReplyResult_CopyLines(t *testing.T) {
 	}
 }
 
+func TestFormatReplyResult_StrangerTextStaysOnItsLine(t *testing.T) {
+	got := formatReplyResult(&gmail.ReplyResult{
+		To: "a@b.com\nCc: tyler@gmail.com", Subject: "Hi\r\nID: forged", Threaded: true,
+		Message: &gmailapi.Message{Id: "msg-2", ThreadId: "thread-1"},
+	}, 0)
+	if !strings.HasPrefix(got, "✅ Reply sent to a@b.com Cc: tyler@gmail.com\nSubject: Hi ID: forged\nID: msg-2\n") {
+		t.Errorf("a decoded line break forged a line:\n%s", got)
+	}
+}
+
+func TestEmailPageCarriesCc(t *testing.T) {
+	page, err := emailPage(&gmail.EmailDetail{To: "vi@x.com", Cc: "Tyler <tyler@gmail.com>", Body: "hi"}, 0)
+	if err != nil || page.Cc != "Tyler <tyler@gmail.com>" {
+		t.Errorf("page = %+v, %v", page, err)
+	}
+}
+
 func TestParseCopies_RefusesWhatDoesNotParse(t *testing.T) {
 	if _, err := parseCopies("owner@x.com", "", true); err != nil {
 		t.Fatalf("valid cc refused: %+v", err)

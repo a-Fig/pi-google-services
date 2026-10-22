@@ -85,7 +85,9 @@ func parseDmarc(authenticationResults string) string {
 // EmailDetail is a full email with body content.
 type EmailDetail struct {
 	EmailSummary
-	To          string           `json:"to"`
+	To string `json:"to"`
+	// Cc is the Cc header as received: who a reply-all would also copy (pi-vi #878).
+	Cc          string           `json:"cc,omitempty"`
 	Body        string           `json:"body"`
 	HTML        bool             `json:"html"`
 	Attachments []AttachmentInfo `json:"attachments,omitempty"`
@@ -340,6 +342,8 @@ func detailFromMessage(msg *gmail.Message) *EmailDetail {
 			detail.Date = h.Value
 		case "To":
 			detail.To = h.Value
+		case "Cc":
+			detail.Cc = h.Value
 		case "Authentication-Results":
 			if detail.AuthenticationResults != "" {
 				detail.AuthenticationResults += "; " + h.Value

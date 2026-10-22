@@ -202,8 +202,11 @@ func (s *GmailService) handleListInbox(ctx context.Context, params json.RawMessa
 // pi-vi issue #102) and the not-threaded warning when Gmail accepted the
 // message without attaching it to the requested conversation.
 func formatReplyResult(reply *gmail.ReplyResult, attachmentCount int) string {
+	// To and Subject come from the thread, so a stranger wrote them. One line
+	// each, whatever they decode to: a forged "Cc:" or "ID:" line would be read
+	// as the connector's own.
 	result := fmt.Sprintf("✅ Reply sent to %s%s\nSubject: %s\nID: %s\nThread: %s",
-		reply.To, formatCopyLines(reply.Cc, reply.Bcc), reply.Subject, reply.Message.Id, reply.Message.ThreadId)
+		oneLine(reply.To), formatCopyLines(reply.Cc, reply.Bcc), oneLine(reply.Subject), reply.Message.Id, reply.Message.ThreadId)
 	if reply.ResolvedFromMessage != "" {
 		result += fmt.Sprintf("\nResolved thread %s from message %s", reply.Message.ThreadId, reply.ResolvedFromMessage)
 	}
@@ -216,6 +219,11 @@ func formatReplyResult(reply *gmail.ReplyResult, attachmentCount int) string {
 		result += fmt.Sprintf("\n📎 Attachments: %d", attachmentCount)
 	}
 	return result
+}
+
+// oneLine folds any line break in a value printed into a tool result to a space.
+func oneLine(value string) string {
+	return strings.Join(strings.Fields(strings.NewReplacer("\r", " ", "\n", " ").Replace(value)), " ")
 }
 
 // parseCopies reads the cc and bcc arguments of send-email and reply-to-email.

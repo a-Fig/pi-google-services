@@ -38,9 +38,12 @@ func ParseRecipients(list string) ([]*mail.Address, error) {
 }
 
 // lenientAddresses reads an address header from a received message. Mail from
-// the wild does not always parse as a whole, so a list that fails is retried
-// entry by entry and what parses is kept. A quoted display name with a comma in
-// it is the one thing the per-entry retry gets wrong; it costs that entry only.
+// the wild does not always parse as a whole (net/mail refuses an Outlook-style
+// "a@x.com <a@x.com>" or a name with brackets in it), so a list that fails is
+// split at the commas outside quotes and angle brackets, and each entry that
+// still fails is reduced to the address in its last <...>, or kept when it is a
+// bare address. Anything else is dropped. The address never comes from a
+// display name, so a name cannot smuggle in a recipient.
 func lenientAddresses(header string) []*mail.Address {
 	if strings.TrimSpace(header) == "" {
 		return nil
@@ -49,12 +52,51 @@ func lenientAddresses(header string) []*mail.Address {
 		return addresses
 	}
 	var found []*mail.Address
-	for _, part := range strings.Split(header, ",") {
-		if address, err := mail.ParseAddress(strings.TrimSpace(part)); err == nil {
+	for _, entry := range splitAddressList(header) {
+		entry = strings.TrimSpace(entry)
+		if address, err := mail.ParseAddress(entry); err == nil {
+			found = append(found, address)
+			continue
+		}
+		spec := entry
+		if open := strings.LastIndex(entry, "<"); open >= 0 {
+			if end := strings.Index(entry[open:], ">"); end > 0 {
+				spec = entry[open+1 : open+end]
+			}
+		}
+		if address, err := mail.ParseAddress(spec); err == nil && address.Name == "" {
 			found = append(found, address)
 		}
 	}
 	return found
+}
+
+// splitAddressList splits an address header at the commas that separate
+// entries: not those inside a quoted display name or an angle-bracketed address.
+func splitAddressList(header string) []string {
+	var entries []string
+	var b strings.Builder
+	quoted, angle, escaped := false, false, false
+	for _, r := range header {
+		switch {
+		case escaped:
+			escaped = false
+		case r == '\\' && quoted:
+			escaped = true
+		case r == '"' && !angle:
+			quoted = !quoted
+		case r == '<' && !quoted:
+			angle = true
+		case r == '>' && !quoted:
+			angle = false
+		case r == ',' && !quoted && !angle:
+			entries = append(entries, b.String())
+			b.Reset()
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return append(entries, b.String())
 }
 
 // FormatRecipients renders addresses as a header value, display names encoded
@@ -83,18 +125,18 @@ func copyHeaders(cc, bcc []*mail.Address) string {
 }
 
 // mergeRecipients appends add to base, keeping the first of any address seen
-// twice and dropping every address in exclude. Addresses compare
-// case-insensitively.
+// twice and dropping every address in exclude. Addresses compare as mailboxes
+// (mailboxKey).
 func mergeRecipients(base, add []*mail.Address, exclude ...string) []*mail.Address {
 	seen := map[string]bool{}
 	for _, address := range exclude {
 		if address != "" {
-			seen[strings.ToLower(address)] = true
+			seen[mailboxKey(address)] = true
 		}
 	}
 	var merged []*mail.Address
 	for _, address := range append(append([]*mail.Address{}, base...), add...) {
-		key := strings.ToLower(address.Address)
+		key := mailboxKey(address.Address)
 		if seen[key] {
 			continue
 		}
@@ -102,6 +144,26 @@ func mergeRecipients(base, add []*mail.Address, exclude ...string) []*mail.Addre
 		merged = append(merged, address)
 	}
 	return merged
+}
+
+// mailboxKey is the mailbox an address delivers to, for comparing two. Case is
+// ignored, and for Gmail so are dots and a +tag in the local part and the
+// googlemail.com spelling, as Gmail itself ignores them: a sender who wrote
+// this account as v.i@gmail.com must not get it copied on its own reply-all.
+func mailboxKey(address string) string {
+	address = strings.ToLower(strings.TrimSpace(address))
+	at := strings.LastIndex(address, "@")
+	if at < 0 {
+		return address
+	}
+	local, domain := address[:at], address[at+1:]
+	if domain != "gmail.com" && domain != "googlemail.com" {
+		return address
+	}
+	if plus := strings.Index(local, "+"); plus >= 0 {
+		local = local[:plus]
+	}
+	return strings.ReplaceAll(local, ".", "") + "@gmail.com"
 }
 
 // addressesOf lists the bare addresses of a list, for mergeRecipients' exclude.
