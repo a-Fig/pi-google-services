@@ -150,6 +150,7 @@ Examples:
 
 Arguments:
 - `to` (required) — recipient email
+- `cc`, `bcc` — comma-separated addresses to copy, openly or invisibly. One that does not parse fails the call.
 - `subject` (required) — email subject
 - `body` — email body text
 - `attachments` — array of files to attach. Each item can have `localPath` (local file) or `driveFileId` (Google Drive file ID)
@@ -164,9 +165,11 @@ Examples:
 
 Arguments:
 - `threadId` (required) — thread to reply to
-- `to` (required) — recipient email
-- `subject` (required) — reply subject
-- `body` — reply body text
+- `to` — recipient email; defaults to the thread's Reply-To, else its From
+- `cc`, `bcc` — comma-separated addresses to copy, openly or invisibly
+- `replyAll` — also copy everyone the answered message went to (its To and Cc), except this account
+- `subject` — ignored when the thread has one
+- `body` (required) — reply body text
 - `attachments` — array of files to attach. Each item can have `localPath` (local file) or `driveFileId` (Google Drive file ID)
 
 ### `download-attachment`

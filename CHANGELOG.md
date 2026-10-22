@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **`cc`, `bcc` and reply-all** (pi-vi #878) — `send-email` and `reply-to-email` take `cc` and `bcc` (comma-separated; an address that does not parse fails the call, as does a line break), and `reply-to-email` takes `replyAll`, which copies the answered message's To and Cc less this account, the reply's recipient and the Bcc. Results list `Cc:` and `Bcc:` lines, bare addresses, under the first line. `get-email`'s JSON page and `get-thread` carry the message's `cc`, so a caller can see who a reply-all would copy before sending; the text form is unchanged.
 - **Fix: `search-emails` searches the whole mailbox** — it delegated to `ListInbox`, which always sent `labelIds=INBOX`; Gmail ANDs that with `q`, so `in:sent`, `in:anywhere` and `to:` matched inbox mail only. `email-watch` keeps the inbox-only list. Same bug as upstream v0.1.20, fixed without its rewrite so the parallel, retrying fetch stays.
 - **Fix: `list-tasks` prints each task's ID** (upstream v0.1.28, #8) — `complete-task` and `delete-task` need one.
 - **Added the MIT `LICENSE`** (from upstream), so the notice travels with the code.

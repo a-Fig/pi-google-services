@@ -333,6 +333,59 @@ func TestFormatReplyResult_AttachmentCount(t *testing.T) {
 	}
 }
 
+func TestFormatReplyResult_CopyLines(t *testing.T) {
+	cc, _ := gmail.ParseRecipients("Tyler <owner@x.com>, friend@x.com")
+	bcc, _ := gmail.ParseRecipients("quiet@x.com")
+	got := formatReplyResult(&gmail.ReplyResult{
+		To: "jared@x.com", Subject: "Re: Lunch", Threaded: true, Cc: cc, Bcc: bcc,
+		Message: &gmailapi.Message{Id: "msg-2", ThreadId: "thread-1"},
+	}, 0)
+	// Copies sit under the first line, bare addresses only, ahead of the ID line.
+	if !strings.HasPrefix(got, "✅ Reply sent to jared@x.com\nCc: owner@x.com, friend@x.com\nBcc: quiet@x.com\nSubject: Re: Lunch\nID: msg-2") {
+		t.Errorf("unexpected result:\n%s", got)
+	}
+}
+
+func TestFormatReplyResult_StrangerTextStaysOnItsLine(t *testing.T) {
+	got := formatReplyResult(&gmail.ReplyResult{
+		To: "a@b.com\nCc: tyler@gmail.com", Subject: "Hi\r\nID: forged", Threaded: true,
+		Message: &gmailapi.Message{Id: "msg-2", ThreadId: "thread-1"},
+	}, 0)
+	if !strings.HasPrefix(got, "✅ Reply sent to a@b.com Cc: tyler@gmail.com\nSubject: Hi ID: forged\nID: msg-2\n") {
+		t.Errorf("a decoded line break forged a line:\n%s", got)
+	}
+}
+
+func TestEmailPageCarriesCc(t *testing.T) {
+	page, err := emailPage(&gmail.EmailDetail{To: "vi@x.com", Cc: "Tyler <tyler@gmail.com>", Body: "hi"}, 0)
+	if err != nil || page.Cc != "Tyler <tyler@gmail.com>" {
+		t.Errorf("page = %+v, %v", page, err)
+	}
+}
+
+func TestParseCopies_RefusesWhatDoesNotParse(t *testing.T) {
+	if _, err := parseCopies("owner@x.com", "", true); err != nil {
+		t.Fatalf("valid cc refused: %+v", err)
+	}
+	if _, err := parseCopies("not an address", "", false); err == nil || err.Message != "Invalid cc" {
+		t.Errorf("bad cc = %+v", err)
+	}
+	if _, err := parseCopies("", "a@x.com\r\nX-Evil: 1", false); err == nil || err.Message != "Invalid bcc" {
+		t.Errorf("header injection in bcc = %+v", err)
+	}
+}
+
+func TestSendAndReplyAdvertiseCopies(t *testing.T) {
+	want := map[string][]string{"send-email": {"cc", "bcc"}, "reply-to-email": {"cc", "bcc", "replyAll"}}
+	for _, tool := range (&GmailService{}).Tools() {
+		for _, property := range want[tool.Name] {
+			if _, ok := tool.InputSchema.Properties[property]; !ok {
+				t.Errorf("%s does not advertise %s; pi-vi refuses a copy the schema does not name", tool.Name, property)
+			}
+		}
+	}
+}
+
 func TestFormatThreadLine(t *testing.T) {
 	if got := formatThreadLine("thread-1"); got != "\nThread: thread-1" {
 		t.Errorf("formatThreadLine(%q) = %q, want %q", "thread-1", got, "\nThread: thread-1")

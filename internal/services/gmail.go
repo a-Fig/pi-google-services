@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"mime"
+	netmail "net/mail"
 	"os"
 	"path/filepath"
 	"strings"
@@ -78,11 +79,13 @@ func (s *GmailService) Tools() []mcp.ToolDefinition {
 		},
 		{
 			Name:        "send-email",
-			Description: "Send an email with optional file attachments. Starts a NEW conversation; to answer an existing email use reply-to-email instead.",
+			Description: "Send an email with optional file attachments, cc and bcc. Starts a NEW conversation; to answer an existing email use reply-to-email instead.",
 			InputSchema: mcp.InputSchema{
 				Type: "object",
 				Properties: map[string]mcp.PropertySchema{
 					"to":      {Type: "string", Description: "Recipient email"},
+					"cc":      {Type: "string", Description: "Optional. Comma-separated addresses to copy, visible to every recipient."},
+					"bcc":     {Type: "string", Description: "Optional. Comma-separated addresses to copy invisibly."},
 					"subject": {Type: "string", Description: "Email subject"},
 					"body":    {Type: "string", Description: "Email body text"},
 					"attachments": {
@@ -102,12 +105,15 @@ func (s *GmailService) Tools() []mcp.ToolDefinition {
 		},
 		{
 			Name:        "reply-to-email",
-			Description: "Reply in-thread to an email, with optional file attachments. Recipient and subject come from the thread so the reply actually threads; normally pass only threadId and body.",
+			Description: "Reply in-thread to an email, with optional file attachments and copies. Recipient and subject come from the thread so the reply actually threads; normally pass only threadId and body, plus replyAll to keep everyone on the thread.",
 			InputSchema: mcp.InputSchema{
 				Type: "object",
 				Properties: map[string]mcp.PropertySchema{
 					"threadId": {Type: "string", Description: "Thread ID to reply to: the Thread: id shown by list-inbox, search-emails, or get-email. A message id also works."},
 					"to":       {Type: "string", Description: "Optional. Recipient email. Defaults to the thread's Reply-To, else its From."},
+					"cc":       {Type: "string", Description: "Optional. Comma-separated addresses to copy, visible to every recipient."},
+					"bcc":      {Type: "string", Description: "Optional. Comma-separated addresses to copy invisibly."},
+					"replyAll": {Type: "boolean", Description: "Optional. Also copy everyone the answered message went to (its To and Cc), except this account."},
 					"subject":  {Type: "string", Description: "Optional and normally omitted. Ignored when the thread has a subject: a reply whose subject differs reads as a separate email in most mail clients."},
 					"body":     {Type: "string", Description: "Reply body text"},
 					"attachments": {
@@ -196,8 +202,11 @@ func (s *GmailService) handleListInbox(ctx context.Context, params json.RawMessa
 // pi-vi issue #102) and the not-threaded warning when Gmail accepted the
 // message without attaching it to the requested conversation.
 func formatReplyResult(reply *gmail.ReplyResult, attachmentCount int) string {
-	result := fmt.Sprintf("✅ Reply sent to %s\nSubject: %s\nID: %s\nThread: %s",
-		reply.To, reply.Subject, reply.Message.Id, reply.Message.ThreadId)
+	// To and Subject come from the thread, so a stranger wrote them. One line
+	// each, whatever they decode to: a forged "Cc:" or "ID:" line would be read
+	// as the connector's own.
+	result := fmt.Sprintf("✅ Reply sent to %s%s\nSubject: %s\nID: %s\nThread: %s",
+		oneLine(reply.To), formatCopyLines(reply.Cc, reply.Bcc), oneLine(reply.Subject), reply.Message.Id, reply.Message.ThreadId)
 	if reply.ResolvedFromMessage != "" {
 		result += fmt.Sprintf("\nResolved thread %s from message %s", reply.Message.ThreadId, reply.ResolvedFromMessage)
 	}
@@ -210,6 +219,52 @@ func formatReplyResult(reply *gmail.ReplyResult, attachmentCount int) string {
 		result += fmt.Sprintf("\n📎 Attachments: %d", attachmentCount)
 	}
 	return result
+}
+
+// oneLine folds any line break in a value printed into a tool result to a space.
+func oneLine(value string) string {
+	return strings.Join(strings.Fields(strings.NewReplacer("\r", " ", "\n", " ").Replace(value)), " ")
+}
+
+// parseCopies reads the cc and bcc arguments of send-email and reply-to-email.
+// An address that does not parse fails the call: sending without someone the
+// caller asked to copy would look like success to a caller that cannot see the
+// headers.
+func parseCopies(cc, bcc string, replyAll bool) (gmail.Copies, *mcp.RPCError) {
+	ccList, err := gmail.ParseRecipients(cc)
+	if err != nil {
+		return gmail.Copies{}, &mcp.RPCError{Code: -32602, Message: "Invalid cc", Data: err.Error()}
+	}
+	bccList, err := gmail.ParseRecipients(bcc)
+	if err != nil {
+		return gmail.Copies{}, &mcp.RPCError{Code: -32602, Message: "Invalid bcc", Data: err.Error()}
+	}
+	return gmail.Copies{Cc: ccList, Bcc: bccList, ReplyAll: replyAll}, nil
+}
+
+// formatCopyLines renders the "Cc:" and "Bcc:" lines a send or reply result
+// carries after its first line, each starting with a newline, or "" when the
+// message went to its To alone. A caller learns who a reply-all reached here.
+func formatCopyLines(cc, bcc []*netmail.Address) string {
+	var b strings.Builder
+	if len(cc) > 0 {
+		fmt.Fprintf(&b, "\nCc: %s", plainRecipients(cc))
+	}
+	if len(bcc) > 0 {
+		fmt.Fprintf(&b, "\nBcc: %s", plainRecipients(bcc))
+	}
+	return b.String()
+}
+
+// plainRecipients lists bare addresses on one line for a tool result. Display
+// names are left out: on a reply-all they come from a stranger's headers, and a
+// decoded name can hold a line break that would forge a result line of its own.
+func plainRecipients(addresses []*netmail.Address) string {
+	parts := make([]string, len(addresses))
+	for i, address := range addresses {
+		parts[i] = address.Address
+	}
+	return strings.Join(parts, ", ")
 }
 
 // formatThreadLine renders the "Thread: <id>" line get-email appends after
@@ -329,6 +384,8 @@ func formatSearchEntry(i int, m *gmail.EmailSummary) string {
 func (s *GmailService) handleSendEmail(ctx context.Context, params json.RawMessage) (interface{}, *mcp.RPCError) {
 	var args struct {
 		To          string            `json:"to"`
+		Cc          string            `json:"cc"`
+		Bcc         string            `json:"bcc"`
 		Subject     string            `json:"subject"`
 		Body        string            `json:"body"`
 		Attachments []attachmentInput `json:"attachments"`
@@ -339,18 +396,22 @@ func (s *GmailService) handleSendEmail(ctx context.Context, params json.RawMessa
 	if args.To == "" || args.Subject == "" {
 		return nil, &mcp.RPCError{Code: -32602, Message: "to and subject required"}
 	}
+	copies, copyErr := parseCopies(args.Cc, args.Bcc, false)
+	if copyErr != nil {
+		return nil, copyErr
+	}
 
 	attachments, attErr := s.resolveAttachments(ctx, args.Attachments)
 	if attErr != nil {
 		return nil, attErr
 	}
 
-	sent, err := s.api.SendEmail(ctx, args.To, args.Subject, args.Body, attachments)
+	sent, err := s.api.SendEmail(ctx, args.To, args.Subject, args.Body, copies, attachments)
 	if err != nil {
 		return nil, rpcError("send", err)
 	}
 
-	result := fmt.Sprintf("✅ Email sent to %s\nID: %s", args.To, sent.Id)
+	result := fmt.Sprintf("✅ Email sent to %s%s\nID: %s", args.To, formatCopyLines(copies.Cc, copies.Bcc), sent.Id)
 	if len(attachments) > 0 {
 		result += fmt.Sprintf("\n📎 Attachments: %d", len(attachments))
 	}
@@ -361,6 +422,9 @@ func (s *GmailService) handleReplyEmail(ctx context.Context, params json.RawMess
 	var args struct {
 		ThreadID    string            `json:"threadId"`
 		To          string            `json:"to"`
+		Cc          string            `json:"cc"`
+		Bcc         string            `json:"bcc"`
+		ReplyAll    bool              `json:"replyAll"`
 		Subject     string            `json:"subject"`
 		Body        string            `json:"body"`
 		Attachments []attachmentInput `json:"attachments"`
@@ -371,13 +435,17 @@ func (s *GmailService) handleReplyEmail(ctx context.Context, params json.RawMess
 	if args.ThreadID == "" || args.Body == "" {
 		return nil, &mcp.RPCError{Code: -32602, Message: "threadId and body required"}
 	}
+	copies, copyErr := parseCopies(args.Cc, args.Bcc, args.ReplyAll)
+	if copyErr != nil {
+		return nil, copyErr
+	}
 
 	attachments, attErr := s.resolveAttachments(ctx, args.Attachments)
 	if attErr != nil {
 		return nil, attErr
 	}
 
-	reply, err := s.api.ReplyToEmail(ctx, args.ThreadID, args.To, args.Subject, args.Body, attachments)
+	reply, err := s.api.ReplyToEmail(ctx, args.ThreadID, args.To, args.Subject, args.Body, copies, attachments)
 	if err != nil {
 		return nil, rpcError("reply", err)
 	}

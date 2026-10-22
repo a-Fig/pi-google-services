@@ -85,7 +85,9 @@ func parseDmarc(authenticationResults string) string {
 // EmailDetail is a full email with body content.
 type EmailDetail struct {
 	EmailSummary
-	To          string           `json:"to"`
+	To string `json:"to"`
+	// Cc is the Cc header as received: who a reply-all would also copy (pi-vi #878).
+	Cc          string           `json:"cc,omitempty"`
 	Body        string           `json:"body"`
 	HTML        bool             `json:"html"`
 	Attachments []AttachmentInfo `json:"attachments,omitempty"`
@@ -340,6 +342,14 @@ func detailFromMessage(msg *gmail.Message) *EmailDetail {
 			detail.Date = h.Value
 		case "To":
 			detail.To = h.Value
+		case "Cc":
+			// Every Cc header, as extractReplyTarget reads them: a message with
+			// two must not show fewer people than a reply-all copies.
+			if detail.Cc != "" {
+				detail.Cc += ", " + h.Value
+			} else {
+				detail.Cc = h.Value
+			}
 		case "Authentication-Results":
 			if detail.AuthenticationResults != "" {
 				detail.AuthenticationResults += "; " + h.Value
@@ -412,9 +422,10 @@ type Attachment struct {
 	Data     []byte
 }
 
-// SendEmail sends a new email with optional attachments.
-func (s *Service) SendEmail(ctx context.Context, to, subject, body string, attachments []Attachment) (*gmail.Message, error) {
-	msg := createMessage(to, subject, body, attachments)
+// SendEmail sends a new email with optional attachments and copies. copies.ReplyAll
+// means nothing on a new email and is ignored.
+func (s *Service) SendEmail(ctx context.Context, to, subject, body string, copies Copies, attachments []Attachment) (*gmail.Message, error) {
+	msg := buildMessage(to, subject, body, attachments, copyHeaders(copies.Cc, copies.Bcc))
 	sent, err := s.svc.Messages.Send("me", msg).Do()
 	if err != nil {
 		return nil, fmt.Errorf("send message: %w", err)
@@ -545,8 +556,8 @@ func createMessage(to, subject, body string, attachments []Attachment) *gmail.Me
 }
 
 // buildMessage assembles the RFC 5322 message. extraHeaders is inserted verbatim
-// after Subject and must already be CRLF-terminated; replies use it to carry
-// In-Reply-To and References.
+// after Subject and must already be CRLF-terminated; it carries Cc and Bcc
+// (copyHeaders) and, on a reply, In-Reply-To and References.
 //
 // The body is a multipart/alternative of the text as written and an HTML
 // rendering of it (body.go says why); attachments wrap that in multipart/mixed.
