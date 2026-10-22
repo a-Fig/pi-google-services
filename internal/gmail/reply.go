@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/mail"
 	"net/textproto"
 	"strings"
 
@@ -36,15 +37,22 @@ type replyTarget struct {
 	References string // its existing References chain, if any
 	Subject    string
 	ReplyTo    string // Reply-To when present, otherwise From
+	// Recipients is everyone the message went to, its To and then its Cc, for
+	// a reply-all.
+	Recipients []*mail.Address
 }
 
 // ReplyResult reports what was actually sent. Threaded is the useful field: it
 // says whether Gmail really attached the reply to the requested conversation,
 // which is the failure this whole file exists to prevent.
 type ReplyResult struct {
-	Message  *gmail.Message
-	To       string
-	Subject  string
+	Message *gmail.Message
+	To      string
+	Subject string
+	// Cc and Bcc are the copies actually sent: on a reply-all, Cc includes
+	// the thread's other recipients.
+	Cc       []*mail.Address
+	Bcc      []*mail.Address
 	Threaded bool
 	// ResolvedFromMessage is set when the caller passed a message ID rather
 	// than a thread ID: it holds that message ID, so the caller can be told
@@ -59,7 +67,10 @@ type ReplyResult struct {
 // to the thread's Reply-To, else its From; subject is always taken from the
 // thread, because a caller cannot know the thread's subject without another
 // round trip and a mismatched one breaks the conversation.
-func (s *Service) ReplyToEmail(ctx context.Context, threadID, to, subject, body string, attachments []Attachment) (*ReplyResult, error) {
+//
+// copies.ReplyAll adds the answered message's other recipients to Cc
+// (replyAllCc); copies.Cc and copies.Bcc are sent as given.
+func (s *Service) ReplyToEmail(ctx context.Context, threadID, to, subject, body string, copies Copies, attachments []Attachment) (*ReplyResult, error) {
 	target, resolvedThreadID, resolvedFromMessage, err := s.threadReplyTarget(threadID)
 	if err != nil {
 		return nil, fmt.Errorf("reply: %w", err)
@@ -75,8 +86,18 @@ func (s *Service) ReplyToEmail(ctx context.Context, threadID, to, subject, body 
 		subject = threadSubject
 	}
 
+	cc := mergeRecipients(nil, copies.Cc)
+	if copies.ReplyAll {
+		profile, err := s.svc.GetProfile("me").Do()
+		if err != nil {
+			return nil, fmt.Errorf("reply: read this account's address for reply-all: %w", err)
+		}
+		cc = replyAllCc(target.Recipients, cc, copies.Bcc, to, profile.EmailAddress)
+	}
+
 	msg := buildMessage(to, subject, body, attachments,
-		replyHeaders(target.MessageID, referencesChain(target.References, target.MessageID)))
+		copyHeaders(cc, copies.Bcc)+
+			replyHeaders(target.MessageID, referencesChain(target.References, target.MessageID)))
 	msg.ThreadId = resolvedThreadID
 
 	sent, err := s.svc.Messages.Send("me", msg).Do()
@@ -88,9 +109,24 @@ func (s *Service) ReplyToEmail(ctx context.Context, threadID, to, subject, body 
 		Message:             sent,
 		To:                  to,
 		Subject:             subject,
+		Cc:                  cc,
+		Bcc:                 copies.Bcc,
 		Threaded:            sent.ThreadId == resolvedThreadID,
 		ResolvedFromMessage: resolvedFromMessage,
 	}, nil
+}
+
+// replyTargetHeaders are the headers extractReplyTarget reads.
+var replyTargetHeaders = []string{"Message-ID", "References", "Subject", "From", "Reply-To", "To", "Cc"}
+
+// replyAllCc is a reply-all's Cc: the explicit copies as given, then everyone
+// the answered message went to, less the reply's own recipient (to, an address
+// header), this account (self), anyone on Bcc and anyone already listed. The
+// thread's sender is the reply's To, so it is not repeated here.
+func replyAllCc(recipients, cc, bcc []*mail.Address, to, self string) []*mail.Address {
+	exclude := append(addressesOf(lenientAddresses(to)), self)
+	exclude = append(exclude, addressesOf(bcc)...)
+	return mergeRecipients(cc, mergeRecipients(nil, recipients, exclude...))
 }
 
 // threadReplyTarget loads a thread and returns its most recent message as the
@@ -111,7 +147,7 @@ func (s *Service) ReplyToEmail(ctx context.Context, threadID, to, subject, body 
 func (s *Service) threadReplyTarget(id string) (target *replyTarget, threadID string, resolvedFromMessage string, err error) {
 	thread, err := s.svc.Threads.Get("me", id).
 		Format("metadata").
-		MetadataHeaders("Message-ID", "References", "Subject", "From", "Reply-To").
+		MetadataHeaders(replyTargetHeaders...).
 		Do()
 	if err != nil {
 		if !isNotFound(err) {
@@ -128,7 +164,7 @@ func (s *Service) threadReplyTarget(id string) (target *replyTarget, threadID st
 
 		thread, err = s.svc.Threads.Get("me", msg.ThreadId).
 			Format("metadata").
-			MetadataHeaders("Message-ID", "References", "Subject", "From", "Reply-To").
+			MetadataHeaders(replyTargetHeaders...).
 			Do()
 		if err != nil {
 			return nil, "", "", fmt.Errorf("load thread %s: %w", msg.ThreadId, err)
@@ -165,6 +201,7 @@ func extractReplyTarget(msg *gmail.Message) *replyTarget {
 		return target
 	}
 	var from string
+	var to, cc []*mail.Address
 	for _, h := range msg.Payload.Headers {
 		switch textproto.CanonicalMIMEHeaderKey(h.Name) {
 		case "Message-Id":
@@ -177,8 +214,13 @@ func extractReplyTarget(msg *gmail.Message) *replyTarget {
 			target.ReplyTo = strings.TrimSpace(h.Value)
 		case "From":
 			from = strings.TrimSpace(h.Value)
+		case "To":
+			to = append(to, lenientAddresses(h.Value)...)
+		case "Cc":
+			cc = append(cc, lenientAddresses(h.Value)...)
 		}
 	}
+	target.Recipients = append(to, cc...)
 	if target.ReplyTo == "" {
 		target.ReplyTo = from
 	}

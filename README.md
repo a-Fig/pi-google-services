@@ -62,8 +62,8 @@ After updating, restart your Pi session.
 | `list-inbox` | Show recent emails |
 | `get-email` | Read full email by ID (lists its attachments) |
 | `search-emails` | Search with Gmail syntax |
-| `send-email` | Send new email with optional file attachments |
-| `reply-to-email` | Reply to thread with optional file attachments |
+| `send-email` | Send new email with optional file attachments, `cc` and `bcc` |
+| `reply-to-email` | Reply to thread with optional file attachments, `cc`, `bcc` and `replyAll` |
 | `download-attachment` | Save an attachment from a received email to disk |
 
 ### Sending attachments

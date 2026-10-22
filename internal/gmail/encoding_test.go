@@ -317,7 +317,7 @@ func TestSendAndReplyPreserveParagraphsOnWire(t *testing.T) {
 					attachments = []Attachment{{Filename: "note.txt", Data: []byte("unchanged attachment")}}
 				}
 				if reply {
-					result, err := s.ReplyToEmail(context.Background(), "thread-1", "", "", body, attachments)
+					result, err := s.ReplyToEmail(context.Background(), "thread-1", "", "", body, Copies{}, attachments)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -325,7 +325,7 @@ func TestSendAndReplyPreserveParagraphsOnWire(t *testing.T) {
 						t.Fatal("reply lost its thread")
 					}
 				} else {
-					if _, err := s.SendEmail(context.Background(), "test@example.com", "Body encoding", body, attachments); err != nil {
+					if _, err := s.SendEmail(context.Background(), "test@example.com", "Body encoding", body, Copies{}, attachments); err != nil {
 						t.Fatal(err)
 					}
 				}

@@ -412,9 +412,10 @@ type Attachment struct {
 	Data     []byte
 }
 
-// SendEmail sends a new email with optional attachments.
-func (s *Service) SendEmail(ctx context.Context, to, subject, body string, attachments []Attachment) (*gmail.Message, error) {
-	msg := createMessage(to, subject, body, attachments)
+// SendEmail sends a new email with optional attachments and copies. copies.ReplyAll
+// means nothing on a new email and is ignored.
+func (s *Service) SendEmail(ctx context.Context, to, subject, body string, copies Copies, attachments []Attachment) (*gmail.Message, error) {
+	msg := buildMessage(to, subject, body, attachments, copyHeaders(copies.Cc, copies.Bcc))
 	sent, err := s.svc.Messages.Send("me", msg).Do()
 	if err != nil {
 		return nil, fmt.Errorf("send message: %w", err)
@@ -545,8 +546,8 @@ func createMessage(to, subject, body string, attachments []Attachment) *gmail.Me
 }
 
 // buildMessage assembles the RFC 5322 message. extraHeaders is inserted verbatim
-// after Subject and must already be CRLF-terminated; replies use it to carry
-// In-Reply-To and References.
+// after Subject and must already be CRLF-terminated; it carries Cc and Bcc
+// (copyHeaders) and, on a reply, In-Reply-To and References.
 //
 // The body is a multipart/alternative of the text as written and an HTML
 // rendering of it (body.go says why); attachments wrap that in multipart/mixed.
